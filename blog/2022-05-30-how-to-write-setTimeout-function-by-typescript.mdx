@@ -1,0 +1,67 @@
+---
+slug: 在ts中编写setTimeout
+title: 在ts中编写setTimeout
+authors: [cbtpro]
+tags: [react, typescript, setTimeout]
+---
+
+使用reactjs拥抱typescript
+
+:::tip
+```js
+// demo.tsx
+interface Props {
+  enabled: boolean; // 启用倒计时
+  countdown: number; // 倒计时读秒时间
+  onEnd: () => {}; // 读秒结束回调
+  onStop: () => {}; // 读秒停止回调
+  onCompleted () => {}; // 定时器结束、停止都会执行
+}
+
+export default function Demo(props: Props) {
+  const {
+    enabled: false,
+    countdown = 10,
+    onEnd = () => {},
+    onStop,
+    onCompleted,
+  } = props;
+  const [count, setCount] = useState(countdown);
+  const [isEnabled, setIsEnabled] = useState(enabled);
+  // 使用ReturnType<typeof setTimeout>推断定时器的返回类型。
+  const [timer, setTimer] = useState<ReturnType<typeof setTimeout>>();
+
+  const startCount = (currentCount = count) => {
+    setCount(currentCount);
+    if (currentCount > 0) {
+      const timerId = setTimeout(() => {
+        const nextCount = currentCount - 1;
+        startCount(nextCount);
+      }, 1000)
+      setTimer(timerId);
+    }
+  };
+  const closeHandler = () => {
+    // 清除定时器
+    clearTimeout(timer as unknown as number);
+  };
+  useEffect(() => {
+    if (enabled) {
+      setIsEnabled(true);
+    } else {
+      closeHandler();
+    }
+  }, [enabled]);
+  return (
+    <div>
+      <div>
+        倒计时{countdown}
+      </div>
+    </div>
+  );
+}
+
+```
+<!-- <button onClick={() => alert('button clicked!')}>Click me!</button> -->
+
+:::

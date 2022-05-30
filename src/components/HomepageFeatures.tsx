@@ -10,7 +10,7 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Easy to Use',
+    title: '简单易用',
     image: '/img/undraw_docusaurus_mountain.svg',
     description: (
       <>
@@ -30,7 +30,7 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Powered by React',
+    title: '由React打造',
     image: '/img/undraw_docusaurus_react.svg',
     description: (
       <>

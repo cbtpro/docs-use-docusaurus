@@ -2,7 +2,7 @@
 sidebar_position: 1
 ---
 
-# Create a Page
+# 创建一个页面
 
 Add **Markdown or React** files to `src/pages` to create a **standalone page**:
 
