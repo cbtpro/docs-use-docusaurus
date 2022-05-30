@@ -2,27 +2,27 @@
 sidebar_position: 1
 ---
 
-# Tutorial Intro
+# 教程介绍
 
-Let's discover **Docusaurus in less than 5 minutes**.
+让我们花不到5分钟的时间来探索 **Docusaurus**.
 
-## Getting Started
+## 使用
 
-Get started by **creating a new site**.
+从 **创建一个新网站** 开始.
 
-Or **try Docusaurus immediately** with **[docusaurus.new](https://docusaurus.new)**.
+或者立即使用**[docusaurus.new](https://docusaurus.new)** **尝试 Docusaurus**.
 
-## Generate a new site
+## 生成一个新站点
 
-Generate a new Docusaurus site using the **classic template**:
+使用 **经典模版** 生成一个新的 Docusaurus 站点:
 
 ```shell
 npm init docusaurus@latest my-website classic
 ```
 
-## Start your site
+## 启动你本地的网站
 
-Run the development server:
+启动开发服务:
 
 ```shell
 cd my-website
@@ -30,6 +30,6 @@ cd my-website
 npx docusaurus start
 ```
 
-Your site starts at `http://localhost:3000`.
+可以通过 `http://localhost:3000` 访问你的站点.
 
-Open `docs/intro.md` and edit some lines: the site **reloads automatically** and displays your changes.
+打开 `docs/intro.md` 并 编辑: 网站会 **自动重新加载** 并且显示您的更改.

@@ -24,13 +24,13 @@ const config = {
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
-          editUrl: 'https://github.com/cbtpro/docs-use-docusaurus',
+          editUrl: 'https://github.com/cbtpro/docs-use-docusaurus/tree/main/docs',
         },
         blog: {
           showReadingTime: true,
           // Please change this to your repo.
           editUrl:
-            'https://docs-use-docusaurus.vercel.app/blog',
+            'https://github.com/cbtpro/docs-use-docusaurus/tree/main/blog',
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),
@@ -53,9 +53,23 @@ const config = {
             type: 'doc',
             docId: 'intro',
             position: 'left',
-            label: 'Tutorial',
+            label: '教程介绍',
           },
-          {to: '/blog', label: 'Blog', position: 'left'},
+          {
+            to: '/blog',
+            label: '博客',
+            position: 'left'
+          },
+          {
+            href: 'https://docs-use-vuepress.vercel.app/',
+            label: 'vue',
+            position: 'left'
+          },
+          {
+            href: 'https://blog.chenbitao.com/',
+            label: 'github-pages',
+            position: 'right'
+          },
           {
             href: 'https://github.com/cbtpro/docs-use-docusaurus',
             label: 'GitHub',
@@ -67,16 +81,16 @@ const config = {
         style: 'dark',
         links: [
           {
-            title: 'Docs',
+            title: '文档',
             items: [
               {
-                label: 'Tutorial',
+                label: '教程介绍',
                 to: '/docs/intro',
               },
             ],
           },
           {
-            title: 'Community',
+            title: '社区',
             items: [
               {
                 label: 'Stack Overflow',
@@ -93,7 +107,7 @@ const config = {
             ],
           },
           {
-            title: 'More',
+            title: '更多',
             items: [
               {
                 label: 'Blog',
@@ -106,7 +120,7 @@ const config = {
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} My Project, Inc. Built with Docusaurus.`,
+        copyright: `Copyright © ${new Date().getFullYear()} 陈碧滔, Inc. Built with Docusaurus.`,
       },
       prism: {
         theme: lightCodeTheme,
