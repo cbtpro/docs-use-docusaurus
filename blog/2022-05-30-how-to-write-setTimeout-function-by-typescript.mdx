@@ -10,17 +10,19 @@ tags: [react, typescript, setTimeout]
 :::tip
 ```js
 // demo.tsx
+import { useState, useEffect } from 'react';
+
 interface Props {
   enabled: boolean; // 启用倒计时
   countdown: number; // 倒计时读秒时间
   onEnd: () => {}; // 读秒结束回调
   onStop: () => {}; // 读秒停止回调
-  onCompleted () => {}; // 定时器结束、停止都会执行
+  onCompleted: () => {}; // 定时器结束、停止都会执行
 }
 
 export default function Demo(props: Props) {
   const {
-    enabled: false,
+    enabled = false,
     countdown = 10,
     onEnd = () => {},
     onStop,
@@ -37,7 +39,7 @@ export default function Demo(props: Props) {
       const timerId = setTimeout(() => {
         const nextCount = currentCount - 1;
         startCount(nextCount);
-      }, 1000)
+      }, 1000);
       setTimer(timerId);
     }
   };
@@ -60,6 +62,10 @@ export default function Demo(props: Props) {
     </div>
   );
 }
+
+Demo.defaultProps = {
+  enabled: false,
+};
 
 ```
 <!-- <button onClick={() => alert('button clicked!')}>Click me!</button> -->
