@@ -17,3 +17,20 @@ hola:
   label: Hola
   permalink: /hola
   description: Hola tag description
+
+react:
+  label: react
+  permalink: /react
+  description: React
+
+createElement:
+  label: createElement
+  permalink: /createElement
+
+js:
+
+dom:
+
+typescript:
+
+setTimeout:

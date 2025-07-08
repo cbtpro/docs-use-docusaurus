@@ -1,6 +1,7 @@
 import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import useVuePlugin from './plugins/use-vue';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -143,6 +144,7 @@ const config: Config = {
       darkTheme: prismThemes.dracula,
     },
   } satisfies Preset.ThemeConfig,
+  plugins: [useVuePlugin],
 };
 
 export default config;
