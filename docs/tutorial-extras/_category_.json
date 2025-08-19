@@ -1,4 +1,7 @@
 {
-  "label": "教程-附加",
-  "position": 3
+  "label": "Tutorial - Extras",
+  "position": 3,
+  "link": {
+    "type": "generated-index"
+  }
 }
