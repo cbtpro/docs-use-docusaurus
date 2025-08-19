@@ -1,20 +1,10 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import CountdownTimer, { CountdownTimerRef } from './SetTimeoutFunction';
 
 export default function Demo() {
   const timerRef = useRef<CountdownTimerRef>(null);
-  const [, forceUpdate] = useState({}); // 用来刷新UI
-
-  // 监听倒计时状态（让外部按钮能实时刷新禁用状态）
-  useEffect(() => {
-    const interval  = window.setInterval(() => {
-      forceUpdate({});
-    }, 200);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  const isRunning = timerRef.current?.isRunning ?? false;
-  const count = timerRef.current?.count ?? 0;
+  const [isRunning, setIsRunning] = useState(false);
+  const [count, setCount] = useState(0);
 
   return (
     <div>
@@ -25,6 +15,10 @@ export default function Demo() {
         onEnd={() => console.log('倒计时结束')}
         onStop={() => console.log('倒计时暂停')}
         onCompleted={() => console.log('倒计时完成/暂停')}
+        onChange={(c, running) => {
+          setCount(c);
+          setIsRunning(running);
+        }}
       />
 
       <div style={{ marginTop: 10 }}>
