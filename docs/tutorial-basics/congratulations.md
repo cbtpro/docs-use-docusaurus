@@ -2,22 +2,24 @@
 sidebar_position: 6
 ---
 
-# Congratulations!
 
-You have just learned the **basics of Docusaurus** and made some changes to the **initial template**.
+# 恭喜！
 
-Docusaurus has **much more to offer**!
+你已经学习了 **Docusaurus 的基础知识**，并对**初始模板**进行了修改。
 
-Have **5 more minutes**? Take a look at **[versioning](../tutorial-extras/manage-docs-versions.md)** and **[i18n](../tutorial-extras/translate-your-site.md)**.
+Docusaurus 还有**更多强大功能**等你探索！
 
-Anything **unclear** or **buggy** in this tutorial? [Please report it!](https://github.com/facebook/docusaurus/discussions/4610)
+还有**5分钟**吗？可以看看**[版本管理](../tutorial-extras/manage-docs-versions.md)**和**[多语言支持](../tutorial-extras/translate-your-site.md)**。
 
-## What's next?
+本教程有任何**疑问**或**问题**？[欢迎反馈！](https://github.com/facebook/docusaurus/discussions/4610)
 
-- Read the [official documentation](https://docusaurus.io/)
-- Modify your site configuration with [`docusaurus.config.js`](https://docusaurus.io/docs/api/docusaurus-config)
-- Add navbar and footer items with [`themeConfig`](https://docusaurus.io/docs/api/themes/configuration)
-- Add a custom [Design and Layout](https://docusaurus.io/docs/styling-layout)
-- Add a [search bar](https://docusaurus.io/docs/search)
-- Find inspirations in the [Docusaurus showcase](https://docusaurus.io/showcase)
-- Get involved in the [Docusaurus Community](https://docusaurus.io/community/support)
+
+## 下一步？
+
+- 阅读 [官方文档](https://docusaurus.io/)
+- 使用 [`docusaurus.config.js`](https://docusaurus.io/docs/api/docusaurus-config) 修改你的网站配置
+- 通过 [`themeConfig`](https://docusaurus.io/docs/api/themes/configuration) 添加导航栏和页脚内容
+- 添加自定义的[设计与布局](https://docusaurus.io/docs/styling-layout)
+- 添加[搜索栏](https://docusaurus.io/docs/search)
+- 在 [Docusaurus 案例展示](https://docusaurus.io/showcase) 中寻找灵感
+- 加入 [Docusaurus 社区](https://docusaurus.io/community/support)

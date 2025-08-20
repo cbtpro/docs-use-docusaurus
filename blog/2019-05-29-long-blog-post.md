@@ -1,13 +1,14 @@
 ---
 slug: long-blog-post
-title: Long Blog Post
+title: 长博客文章
 authors: yangshun
 tags: [hello, docusaurus]
 ---
 
-This is the summary of a very long blog post,
 
-Use a `<!--` `truncate` `-->` comment to limit blog post size in the list view.
+这是一篇很长博客文章的摘要。
+
+可以使用 `<!-- truncate -->` 注释来限制列表视图中的博客文章长度。
 
 <!-- truncate -->
 

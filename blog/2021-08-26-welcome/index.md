@@ -1,29 +1,32 @@
 ---
+
 slug: welcome
-title: Welcome
+title: 欢迎
 authors: [slorber, yangshun]
 tags: [facebook, hello, docusaurus]
 ---
 
-[Docusaurus blogging features](https://docusaurus.io/docs/blog) are powered by the [blog plugin](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-blog).
 
-Here are a few tips you might find useful.
+[Docusaurus 博客功能](https://docusaurus.io/docs/blog)由 [blog 插件](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-blog)驱动。
+
+这里有一些你可能会用到的小技巧。
 
 <!-- truncate -->
 
-Simply add Markdown files (or folders) to the `blog` directory.
 
-Regular blog authors can be added to `authors.yml`.
+只需将 Markdown 文件（或文件夹）添加到 `blog` 目录即可。
 
-The blog post date can be extracted from filenames, such as:
+常规博客作者可以添加到 `authors.yml` 文件中。
+
+博客文章的日期可以从文件名中提取，例如：
 
 - `2019-05-30-welcome.md`
 - `2019-05-30-welcome/index.md`
 
-A blog post folder can be convenient to co-locate blog post images:
+为博客文章单独建文件夹可以方便地存放图片：
 
-![Docusaurus Plushie](./docusaurus-plushie-banner.jpeg)
+![Docusaurus 毛绒玩偶](./docusaurus-plushie-banner.jpeg)
 
-The blog supports tags as well!
+博客还支持标签功能！
 
-**And if you don't want a blog**: just delete this directory, and use `blog: false` in your Docusaurus config.
+**如果你不需要博客**：只需删除此目录，并在 Docusaurus 配置中设置 `blog: false`。

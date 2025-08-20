@@ -1,12 +1,14 @@
 ---
 slug: first-blog-post
-title: First Blog Post
+title: 第一篇博客
 authors: [slorber, yangshun]
 tags: [hola, docusaurus]
 ---
 
-Lorem ipsum dolor sit amet...
+
+这是第一篇博客的内容……
 
 <!-- truncate -->
 
-...consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet
+
+……更多内容，欢迎补充。
