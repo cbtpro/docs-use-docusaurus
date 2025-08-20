@@ -1,5 +1,4 @@
 ---
-slug: 为什么还要学习js创建html这些基础
 title: 为什么还要学习js创建html这些基础
 authors: [cbtpro]
 tags: [createElement, js, dom]
