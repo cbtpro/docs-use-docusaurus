@@ -1,5 +1,6 @@
 ---
 title: 在 Docusaurus MDX 中使用 ReactLive 的案例
+authors: [cbtpro]
 description: 展示如何在 Docusaurus 的 MDX 博客中通过 ReactLive 组件交互式演示 TypeScript 代码
 tags:
   - docusaurus
