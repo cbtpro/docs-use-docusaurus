@@ -156,6 +156,18 @@ const config: Config = {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
     },
+    algolia: {
+      // The application ID provided by Algolia
+      appId: 'QM8WILOO4F',
+
+      // Public API key: it is safe to commit it
+      apiKey: 'f003dda41f1095f7ca4706433e2b2c0a',
+
+      indexName: 'docs-use-docusaurus',
+
+      // Optional: see doc section below
+      contextualSearch: true,
+    },
   } satisfies Preset.ThemeConfig,
   // 加载插件列表
   plugins: [useVuePlugin],
