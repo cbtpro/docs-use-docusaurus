@@ -22,12 +22,16 @@
     "prism-react-renderer": "^2.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-live": "^4.1.8"
+    "react-live": "^4.1.8",
+    "use-vue-component": "git+git@github.com:cbtpro/use-vue-component.git",
+    "vue": "^3.5.18",
+    "vue-loader": "^17.4.2"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "3.8.1",
     "@docusaurus/tsconfig": "3.8.1",
     "@docusaurus/types": "3.8.1",
+    "@vitejs/plugin-vue": "^6.0.1",
     "typescript": "~5.6.2"
   },
   "browserslist": {
