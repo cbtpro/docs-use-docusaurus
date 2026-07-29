@@ -609,6 +609,8 @@ export default function VirtualList<T>({
 
 **何时使用成熟库。** 手写虚拟列表适合理解原理和应对简单场景。如果你的需求涉及动态行高、分组列表、网格布局、窗口虚拟化（windowing）等复杂场景，建议使用 `react-window`（轻量、API 简洁）或 `@tanstack/virtual`（无头、框架无关、灵活性高）。它们在生产环境中经过了大量边界情况的考验。
 
+**浏览器兼容性。** 上述方案依赖的 `IntersectionObserver`、`ResizeObserver`、`requestAnimationFrame` 等现代浏览器 API，在现代浏览器中已得到广泛支持，但在旧版浏览器（如 IE 11 及更早）中不可用。成熟库通常会内置兼容方案：`react-window` 和 `@tanstack/virtual` 会针对旧浏览器降级到 scroll 事件计算策略，并提供相应的 polyfill。如果你的项目需要支持旧版浏览器，优先选择成熟库而非手写实现，可以省去单独处理兼容性的负担。
+
 ## 总结
 
 本文从 Class 组件的生命周期出发，建立了"组件从创建到销毁"的认知地图，然后看到 Hooks 如何以更灵活的方式覆盖每个阶段——不是机械地一一对应，而是从"按阶段组织"转向"按逻辑组织"。
