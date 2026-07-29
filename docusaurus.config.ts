@@ -154,7 +154,7 @@ const config: Config = {
           ],
         },
       ],
-        copyright: `Copyright © ${new Date().getFullYear()} 陈碧滔, Inc. Built with Docusaurus.`,
+        copyright: `Copyright © ${new Date().getFullYear()} cbtpro, Inc. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,
