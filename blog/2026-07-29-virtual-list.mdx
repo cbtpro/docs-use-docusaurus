@@ -1,0 +1,620 @@
+---
+title: ReactJS 组件开发最佳实践 — 从生命周期到虚拟列表
+authors: [cbtpro]
+description: 从 React 组件生命周期出发，理解 Class 与 Hooks 的设计差异，最终从零构建一个高性能虚拟列表组件
+tags:
+  - react
+  - hooks
+  - 虚拟列表
+  - 性能优化
+  - typescript
+---
+
+import VirtualListDemo from '@site/src/components/virtual-list/Demo';
+
+# ReactJS 组件开发最佳实践 — 从生命周期到虚拟列表
+
+当列表数据量达到上万条时，直接渲染所有 DOM 节点会导致页面卡顿甚至崩溃。解决这个问题需要"虚拟列表"——只渲染可视区域内的元素。但要写好一个虚拟列表组件，需要对 React 的生命周期、副作用处理、性能优化有扎实的理解。
+
+本文从 React 组件的生命周期出发，先建立对 Hooks 设计意图的认知，再将这些概念逐一应用到一个真实的虚拟列表组件中。
+
+<!-- truncate -->
+
+## 通过 Class 组件理解生命周期
+
+React 组件从创建到销毁，经历一条清晰的生命周期主线。Class 组件用一组语义明确的方法来对应这条主线：
+
+```
+constructor → render → componentDidMount → componentDidUpdate → componentWillUnmount
+   初始化      渲染      挂载完成（首次）      更新完成（后续）        即将卸载
+```
+
+`constructor` 负责初始化 state 和绑定方法；`render` 描述组件应该长什么样；`componentDidMount` 在首次渲染后执行，适合发起网络请求或绑定事件；`componentDidUpdate` 在后续每次更新后执行，适合根据 props/state 变化做响应式操作；`componentWillUnmount` 在组件销毁前执行，负责清理定时器、取消订阅、解绑事件。
+
+这条主线有一个显著特点：**同一条业务逻辑被拆散到了不同的生命周期方法中**。比如"监听窗口滚动"这件事，绑定写在 `componentDidMount`，清理写在 `componentWillUnmount`，相关的 state 可能定义在 `constructor`——你需要在三个不同的方法之间跳转才能理解这一件事的完整逻辑。
+
+Class 组件的生命周期是"按阶段组织代码"，而 Hooks 的设计目标是"按业务逻辑组织代码"。
+
+## 用 Hooks 驾驭生命周期
+
+函数组件没有独立的生命周期钩子，但 Hooks 以更灵活的方式覆盖了每个阶段：
+
+| 阶段 | Class 组件 | Hooks 方式 |
+|------|-----------|-----------|
+| 初始化 | `constructor` 中 `this.state = ...` | `useState(initialValue)` |
+| 渲染 | `render()` 方法 | 函数体本身（每次渲染都执行） |
+| 挂载后 | `componentDidMount` | `useEffect(() => {...}, [])` |
+| 更新后 | `componentDidUpdate` | `useEffect(() => {...}, [dep])` |
+| 卸载时 | `componentWillUnmount` | `useEffect` 返回的 cleanup 函数 |
+
+关键区别在于：Hooks 不是"一一对应"的替代品。Class 组件的思维方式是"在某个阶段该做什么"，而 Hooks 的思维方式是"把相关的事情放在一起"。
+
+函数组件的函数体本身就承担了 `render` 的角色——每次渲染都会重新执行，`useState` 会返回当前值，`useMemo` 会根据依赖决定是否重新计算，`useEffect` 会在渲染提交后根据依赖数组决定是否执行。这种"声明式"的方式让你不再需要关心"这段代码在哪个阶段执行"，而是只需要关心"这段代码依赖了什么"。
+
+## Hooks 的代码组织优势
+
+生命周期方法的"按阶段拆分"在组件变复杂后会带来严重的可维护性问题。来看一个具体例子——"监听滚动位置并更新状态"这条业务逻辑：
+
+<div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 16 }}>
+<div style={{ flex: '1 1 300px', minWidth: 300 }}>
+
+**Class 写法 — 逻辑散落三处**
+
+```tsx
+class ScrollTracker extends React.Component {
+  // 🟡 初始化：定义 state
+  constructor(props) {
+    super(props);
+    this.state = { scrollTop: 0 };
+    this.handleScroll = this.handleScroll.bind(this);
+  }
+
+  // 🔵 挂载：绑定事件
+  componentDidMount() {
+    window.addEventListener(
+      'scroll', this.handleScroll
+    );
+  }
+
+  // 🔴 卸载：解绑事件
+  componentWillUnmount() {
+    window.removeEventListener(
+      'scroll', this.handleScroll
+    );
+  }
+
+  // 散落在各处的辅助方法
+  handleScroll() {
+    this.setState({
+      scrollTop: window.scrollY
+    });
+  }
+
+  render() {
+    return <div>{this.state.scrollTop}</div>;
+  }
+}
+```
+
+</div>
+<div style={{ flex: '1 1 300px', minWidth: 300 }}>
+
+**Hooks 写法 — 逻辑聚合在一起**
+
+```tsx
+function ScrollTracker() {
+  // 🟡🔵🔴 一条业务线，一个 Hook 搞定
+  const [scrollTop, setScrollTop] = useState(0);
+
+  useEffect(() => {
+    // 🔵 挂载：绑定
+    const handler = () =>
+      setScrollTop(window.scrollY);
+    window.addEventListener('scroll', handler);
+
+    // 🔴 卸载：清理（同一个代码块内）
+    return () =>
+      window.removeEventListener('scroll', handler);
+  }, []); // 依赖数组声明在这里
+
+  return <div>{scrollTop}</div>;
+}
+```
+
+</div>
+</div>
+
+<div style={{ marginTop: 16 }}>
+
+在 Class 写法中，同一条业务线的代码被拆散到了 `constructor`、`componentDidMount`、`componentWillUnmount` 三个方法里。当组件包含多条业务线时，每个生命周期方法都会变成各种逻辑的大杂烩。
+
+而在 Hooks 写法中，状态声明、副作用绑定、清理逻辑全部聚合在同一个 `useEffect` 调用块内。这种"按逻辑聚合"的方式，让组件在代码行数增长后仍然保持良好的可维护性。
+
+如果你想进一步了解不同框架在同一特性上的实现差异，可以参考 [Component Party](https://component-party.dev/?f=react-vue3)，它覆盖了 React、Vue 3、Svelte、Solid 等主流框架，将生命周期、状态管理、组件通信、插槽等特性一一并排呈现。你可以自由勾选要对比的框架，并在左侧特性导航中选择感兴趣的主题查看具体代码。
+
+</div>
+
+### 自定义 Hook：进一步降低复杂度
+
+当组件代码行数继续膨胀，可以将聚合后的逻辑块抽取为**自定义 Hook**：
+
+```tsx
+function useScrollPosition() {
+  const [scrollTop, setScrollTop] = useState(0);
+
+  useEffect(() => {
+    const handler = () => setScrollTop(window.scrollY);
+    window.addEventListener('scroll', handler);
+    return () => window.removeEventListener('scroll', handler);
+  }, []);
+
+  return scrollTop;
+}
+
+// 组件本身变得极其简洁
+function ScrollTracker() {
+  const scrollTop = useScrollPosition();
+  return <div>{scrollTop}</div>;
+}
+```
+
+自定义 Hook 的好处有三点：组件本身的代码行数与认知负担大幅降低；业务逻辑被独立封装，可以在多个组件间复用，也更容易单独测试；即使某个 Hook 内部存在 bug，问题也被限制在它自己的作用域内，不会污染组件的其他逻辑。
+
+## React 对副作用的严格态度
+
+React 对副作用的处理有着近乎偏执的严格要求。这不是小题大做——副作用（网络请求、DOM 操作、事件订阅、定时器等）是 bug 最集中的来源。
+
+在开发模式下，React 会通过 **Strict Mode** 对每个组件执行**双重调用**：
+
+```
+mount → unmount → mount
+```
+
+也就是说，React 会故意让你的组件先挂载、立刻卸载、再挂载一次。这样做的目的是**暴露那些没有正确清理的副作用**。
+
+如果你的 `useEffect` 在双重调用后行为异常——比如事件被绑定了两次、请求被发送了两次、状态出现了诡异的偏差——这说明你的 cleanup 函数写得不对，或者 effect 的依赖数组有问题。
+
+这不是 bug，而是 React 在帮你提前发现问题。它确保每个 effect 都有对应的 cleanup，确保组件能安全地"重新挂载"。在真实场景中，组件可能因为路由切换、条件渲染、父组件重渲染等原因被反复挂载和卸载——如果你的 effect 不能在 unmount 时正确清理，在 mount 时就会出问题。
+
+后面的虚拟列表实现中，我们会看到一个具体的例子：绑定 scroll 监听 → cleanup 解绑 → 再次绑定，这个过程在 Strict Mode 下必须能正确工作。
+
+## useMemo — 避免重复计算
+
+`useMemo` 用于缓存计算结果，只有依赖变化时才重新计算：
+
+```tsx
+const expensiveValue = useMemo(() => computeExpensiveValue(a, b), [a, b]);
+```
+
+**什么时候该用：** 派生数据（过滤、排序、切片）、计算成本高的操作、作为其他 Hook 依赖的值。
+
+**什么时候不该用：** 简单的四则运算、字符串拼接等廉价操作——`useMemo` 本身有开销（依赖比较、缓存管理），对廉价计算来说反而增加负担。
+
+在虚拟列表中，计算可视范围（`startIndex`、`endIndex`）和可见项切片是典型的 `useMemo` 应用场景——这些计算依赖 `scrollTop`、`itemHeight` 等值，每次滚动都会触发重新计算，但它们的结果可以直接从缓存中获取。
+
+## useCallback — 稳定函数引用
+
+在 React 中，函数每次渲染都会重新创建，这意味着函数的引用每次都不一样。如果把这个函数作为 props 传给子组件，或者放在某个 `useEffect` 的依赖数组中，就会引发不必要的重渲染或重复执行。
+
+`useCallback` 让函数在依赖不变时保持引用稳定：
+
+```tsx
+const handleClick = useCallback(() => {
+  doSomething(a, b);
+}, [a, b]); // 只有 a、b 变化时才返回新的函数引用
+```
+
+在虚拟列表中，scroll 事件处理函数需要传给 `useEffect` 的依赖数组。如果不使用 `useCallback`，每次渲染都会产生新的函数引用，导致 `useEffect` 反复执行（反复解绑、绑定事件监听），这显然是不合理的。
+
+## 什么是虚拟列表
+
+虚拟列表的核心原理非常直观：
+
+<div style={{
+  background: '#f8f9fa',
+  borderRadius: 8,
+  padding: '20px 24px',
+  marginTop: 12,
+  fontFamily: 'monospace',
+  fontSize: 14,
+  lineHeight: 1.8,
+}}>
+
+<div style={{ color: '#6b7280' }}>┌─────────────────────────────────┐</div>
+<div style={{ color: '#6b7280' }}>│</div>
+<div style={{ color: '#059669', fontWeight: 600 }}>│  ▲ overscan 缓冲区（多渲染几行，减少白屏）</div>
+<div style={{ color: '#6b7280' }}>│</div>
+<div style={{ border: '2px solid #3b82f6', borderRadius: 4, padding: '4px 8px', background: '#eff6ff' }}>
+<div style={{ color: '#2563eb', fontWeight: 600 }}>│  ■ 可视区域 — 用户实际能看到的行</div>
+</div>
+<div style={{ color: '#6b7280' }}>│</div>
+<div style={{ color: '#059669', fontWeight: 600 }}>│  ▼ overscan 缓冲区</div>
+<div style={{ color: '#6b7280' }}>│</div>
+<div style={{ color: '#9ca3af' }}>│  · 未渲染（用 height 撑开完整滚动高度）</div>
+<div style={{ color: '#9ca3af' }}>│  · 未渲染</div>
+<div style={{ color: '#9ca3af' }}>│  · ...（可能还有几万行）</div>
+<div style={{ color: '#6b7280' }}>└─────────────────────────────────┘</div>
+<div style={{ color: '#6b7280', marginTop: 8 }}>│← 滚动容器（固定高度，overflow: auto）→│</div>
+<div style={{ color: '#9ca3af' }}>↑ 内部 div 用 height 撑开完整高度，可见项通过 translateY 偏移到正确位置</div>
+
+</div>
+
+不管数据量是 1 万还是 100 万，DOM 中始终只有"可视区域 + 缓冲区"那么多个节点。滚动的本质是更新 `scrollTop`，然后根据它重新计算哪些项应该渲染。
+
+但"怎么知道该渲染哪些项"这个问题，有不止一种策略。
+
+### 虚拟列表的多种实现策略
+
+**策略一：Scroll 事件 + 数学计算（本文采用）**
+
+监听滚动容器的 `scroll` 事件，通过 `scrollTop` 和 `itemHeight` 数学计算出当前可视范围对应的 `startIndex` 和 `endIndex`，然后渲染这个切片。
+
+```tsx
+useEffect(() => {
+  node.addEventListener('scroll', handleScroll);
+  return () => node.removeEventListener('scroll', handleScroll);
+}, [handleScroll]);
+
+const startIndex = Math.floor(scrollTop / itemHeight);
+```
+
+这是最经典也最直观的方案。优点是精确可控，任意时刻都能算出应该渲染哪些项。缺点是需要手动处理 scroll 事件节流、overscan 缓冲区、以及 cleanup 清理。
+
+**策略二：IntersectionObserver 边界检测**
+
+不监听 scroll 事件，而是在已渲染列表的上下边界各放一个"哨兵元素"（sentinel），用 `IntersectionObserver` 检测它们是否进入可视区域。当顶部哨兵可见时，说明用户向上滚出了缓冲区，需要渲染更前面的项；底部哨兵同理。
+
+```tsx
+useEffect(() => {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        // 哨兵进入可视区域 → 触发渲染更多项
+        if (entry.target.dataset.position === 'top') {
+          shiftWindow('up');
+        } else {
+          shiftWindow('down');
+        }
+      }
+    });
+  }, { root: containerRef.current });
+
+  observer.observe(topSentinelRef.current);
+  observer.observe(bottomSentinelRef.current);
+
+  return () => observer.disconnect();
+}, []);
+```
+
+这种方案的优势在于：`IntersectionObserver` 是浏览器原生 API，回调在空闲时异步触发，不会像 scroll 事件那样高频执行，天然避免了节流问题。cleanup 也更语义化——`observer.disconnect()` 一行搞定，不需要手动解绑事件。
+
+缺点是逻辑不如数学计算直观：你无法直接从 scrollTop 得知当前在第几项，而是通过哨兵的可见性"推断"出需要加载的方向。对于需要精确定位（如"跳转到第 5000 项"）的场景，还是需要回退到计算方案。
+
+**策略三：ResizeObserver 配合自适应**
+
+当列表项高度不固定时，可以用 `ResizeObserver` 监听每个已渲染项的实际高度，动态修正总高度和可视范围。这通常不作为独立的虚拟列表策略，而是作为策略一或策略二的补充——处理动态行高的场景。
+
+```tsx
+useEffect(() => {
+  const observer = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      // 缓存每项的实际高度，修正总高度
+      heightCache.set(entry.target.dataset.index, entry.contentRect.height);
+    }
+    recalculateTotalHeight();
+  });
+
+  // 监听所有已渲染项的高度变化
+  items.forEach(el => observer.observe(el));
+  return () => observer.disconnect();
+}, [visibleItems]);
+```
+
+### 对比
+
+| 策略 | 触发方式 | 性能 | 精确度 | 适用场景 |
+|------|---------|------|--------|---------|
+| Scroll + 计算 | scroll 事件（需节流） | 好（需手动优化） | 精确 | 定高列表、需要精确定位 |
+| IntersectionObserver | 浏览器异步回调 | 更好（天然节流） | 方向性 | 不定高、无需精确跳转 |
+| ResizeObserver（辅助） | 尺寸变化时 | 好 | 自适应 | 动态行高的补充方案 |
+
+本文选择 Scroll + 计算方案，因为它最直观、最可控，也最能展示虚拟列表的核心原理。在实际项目中，`@tanstack/virtual` 等成熟库往往同时结合多种策略——用 scroll 计算做基础，用 IntersectionObserver 做边界检测，用 ResizeObserver 做动态高度适配。
+
+## 从零实现虚拟列表组件
+
+现在把前面介绍的所有概念综合起来，一步步构建虚拟列表。
+
+### 状态管理：滚动偏移量
+
+组件需要追踪的唯一状态就是当前滚动位置：
+
+```tsx
+const [scrollTop, setScrollTop] = useState(0);
+```
+
+### 副作用：绑定 scroll 监听
+
+用 `useEffect` 绑定事件监听，并在 cleanup 中解绑。这里体现了 React 对副作用的严格要求——cleanup 必须写对，否则 Strict Mode 的双重调用会导致事件被绑定两次：
+
+```tsx
+const containerRef = useRef<HTMLDivElement>(null);
+
+const handleScroll = useCallback(() => {
+  if (containerRef.current) {
+    setScrollTop(containerRef.current.scrollTop);
+  }
+}, []);
+
+useEffect(() => {
+  const node = containerRef.current;
+  if (!node) return;
+  node.addEventListener('scroll', handleScroll);
+  // cleanup：React 会确保在 unmount 时执行
+  // Strict Mode 下这里会被调用，然后重新 mount
+  return () => node.removeEventListener('scroll', handleScroll);
+}, [handleScroll]);
+```
+
+`handleScroll` 用 `useCallback` 包裹，保证引用稳定，避免 `useEffect` 因依赖变化而反复执行。
+
+### 计算可视范围：useMemo 的应用
+
+每次 `scrollTop` 变化时，需要重新计算哪些项应该渲染。这是一个典型的派生数据场景，用 `useMemo` 缓存：
+
+```tsx
+const totalHeight = useMemo(
+  () => items.length * itemHeight,
+  [items.length, itemHeight]
+);
+
+const { startIndex, endIndex, visibleItems } = useMemo(() => {
+  const start = Math.max(
+    0,
+    Math.floor(scrollTop / itemHeight) - overscan
+  );
+  const visibleCount = Math.ceil(height / itemHeight);
+  const end = Math.min(
+    items.length - 1,
+    Math.ceil(scrollTop / itemHeight) + visibleCount + overscan
+  );
+  return {
+    startIndex: start,
+    endIndex: end,
+    visibleItems: items.slice(start, end + 1),
+  };
+}, [scrollTop, itemHeight, height, overscan, items]);
+```
+
+`overscan` 是上下缓冲区额外渲染的行数，防止用户快速滚动时看到空白区域。
+
+### 渲染：Transform 定位
+
+用一个 `height: totalHeight` 的容器撑开完整滚动高度，可见项通过 `transform: translateY()` 偏移到正确位置：
+
+```tsx
+const offsetY = startIndex * itemHeight;
+
+return (
+  <div ref={containerRef} style={{ height, overflow: 'auto' }}>
+    <div style={{ height: totalHeight, position: 'relative' }}>
+      <div style={{ transform: `translateY(${offsetY}px)` }}>
+        {visibleItems.map((item, i) => (
+          <div key={startIndex + i} style={{ height: itemHeight }}>
+            {renderItem(item, startIndex + i)}
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+```
+
+`transform: translateY()` 由 GPU 加速，不会触发重排（reflow），滚动性能优于 padding 方案。注意 `key` 使用的是 `startIndex + i`（即数据的真实索引），而不是从 0 开始的数组索引。这样 React 在 diff 时能正确识别哪些节点是复用的、哪些是新增的。
+
+### 性能优化：动态 overscan + rAF 节流
+
+上面的实现 overscan 是固定的 5 行。慢速滚动时足够，但快速滚动时渲染速度跟不上，可视区域边缘会出现空白。
+
+解决思路很直接：**追踪滚动速度，速度越快，缓冲区越大。**
+
+```tsx
+const velocityRef = useRef(0);
+const rafIdRef = useRef(0);
+
+const handleScroll = useCallback(() => {
+  const node = containerRef.current;
+  if (!node) return;
+
+  const currentScrollTop = node.scrollTop;
+  const now = performance.now();
+
+  // 计算滚动速度（px/ms）
+  if (lastTimeRef.current > 0) {
+    velocityRef.current =
+      Math.abs(currentScrollTop - lastScrollTopRef.current) /
+      (now - lastTimeRef.current);
+  }
+  lastScrollTopRef.current = currentScrollTop;
+  lastTimeRef.current = now;
+
+  // rAF 节流：每帧最多更新一次 scrollTop
+  if (!rafIdRef.current) {
+    rafIdRef.current = requestAnimationFrame(() => {
+      setScrollTop(currentScrollTop);
+      rafIdRef.current = 0;
+    });
+  }
+}, []);
+```
+
+然后在可视范围计算中，用速度动态放大 overscan：
+
+```tsx
+const dynamicOverscan = overscan + Math.floor(Math.min(velocity, 10) * 5);
+```
+
+速度上限 10 px/ms（约 600px/帧），此时额外增加 50 行缓冲。慢速滚动时速度接近 0，overscan 回到基础值，不会浪费 DOM 节点。
+
+这两个优化配合使用：rAF 节流减少主线程的 `setState` 频率，让浏览器有更多时间渲染；动态 overscan 在速度飙升时提前多渲染几行，填补渲染延迟造成的空白。
+
+## 交互式 Demo
+
+下面的示例对比了普通列表和虚拟列表在处理大量数据时的表现。你可以调节数据量、行高和容器高度，观察两者在渲染 DOM 数量和滚动流畅度上的差异：
+
+<VirtualListDemo />
+
+## 定高虚拟列表完整代码
+
+<details>
+<summary>点击展开完整代码</summary>
+
+```tsx
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+
+interface VirtualListProps<T> {
+  /** 完整数据列表 */
+  items: T[];
+  /** 每行高度（px） */
+  itemHeight: number;
+  /** 容器高度（px） */
+  height: number;
+  /** 上下缓冲区额外渲染的行数 */
+  overscan?: number;
+  /** 渲染每一行的组件 */
+  renderItem: (item: T, index: number) => React.ReactNode;
+}
+
+export default function VirtualList<T>({
+  items,
+  itemHeight,
+  height,
+  overscan = 5,
+  renderItem,
+}: VirtualListProps<T>) {
+  const [scrollTop, setScrollTop] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 性能优化相关 ref
+  const rafIdRef = useRef(0);
+  const lastScrollTopRef = useRef(0);
+  const lastTimeRef = useRef(0);
+  const velocityRef = useRef(0);
+
+  // 总高度
+  const totalHeight = useMemo(
+    () => items.length * itemHeight,
+    [items.length, itemHeight]
+  );
+
+  // 可视范围计算：根据滚动速度动态扩大缓冲区
+  const { startIndex, endIndex, visibleItems } = useMemo(() => {
+    const velocity = velocityRef.current;
+    const dynamicOverscan = overscan + Math.floor(Math.min(velocity, 10) * 5);
+    const start = Math.max(0, Math.floor(scrollTop / itemHeight) - dynamicOverscan);
+    const visibleCount = Math.ceil(height / itemHeight);
+    const end = Math.min(
+      items.length - 1,
+      Math.ceil(scrollTop / itemHeight) + visibleCount + dynamicOverscan
+    );
+    return {
+      startIndex: start,
+      endIndex: end,
+      visibleItems: items.slice(start, end + 1),
+    };
+  }, [scrollTop, itemHeight, height, overscan, items]);
+
+  // rAF 节流 + 速度追踪
+  const handleScroll = useCallback(() => {
+    const node = containerRef.current;
+    if (!node) return;
+
+    const currentScrollTop = node.scrollTop;
+    const now = performance.now();
+
+    if (lastTimeRef.current > 0) {
+      velocityRef.current =
+        Math.abs(currentScrollTop - lastScrollTopRef.current) /
+        (now - lastTimeRef.current);
+    }
+    lastScrollTopRef.current = currentScrollTop;
+    lastTimeRef.current = now;
+
+    if (!rafIdRef.current) {
+      rafIdRef.current = requestAnimationFrame(() => {
+        setScrollTop(currentScrollTop);
+        rafIdRef.current = 0;
+      });
+    }
+  }, []);
+
+  // 绑定/解绑 scroll 监听
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    node.addEventListener('scroll', handleScroll, { passive: true });
+    return () => node.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
+
+  // transform 定位 + will-change 提示 GPU 加速
+  const offsetY = startIndex * itemHeight;
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        height,
+        overflow: 'auto',
+        border: '1px solid #d1d5db',
+        borderRadius: 6,
+      }}
+    >
+      <div style={{ height: totalHeight, position: 'relative' }}>
+        <div style={{ transform: `translateY(${offsetY}px)`, willChange: 'transform' }}>
+          {visibleItems.map((item, i) => (
+            <div
+              key={startIndex + i}
+              style={{ height: itemHeight, boxSizing: 'border-box' }}
+            >
+              {renderItem(item, startIndex + i)}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+</details>
+
+## 进阶：动态行高
+
+上面的实现假设每行高度固定。当行高不固定时，核心思路是：
+
+**预估 + 测量 + 缓存。** 初始时用预估高度计算总高度和可视范围；每行渲染后，通过 `ref` 测量其实际高度并缓存到一个 Map 中（key 为数据索引）。后续滚动时，用缓存的实际高度代替预估值，逐步修正总高度和可视范围。
+
+实现上需要注意：测量操作本身发生在 `useLayoutEffect` 中（在浏览器绘制前完成，避免闪烁），且测量结果的变化会触发重新渲染——需要避免死循环（当缓存命中时不再更新 state）。
+
+这个方案在数据量大时仍然高效，因为大部分行的高度在首次渲染后就被缓存了，后续滚动只需处理少量新进入可视区域的行。
+
+## 实践中的注意事项
+
+**passive 事件监听。** 上面代码中 `addEventListener` 的第三个参数传了 `{ passive: true }`。这告诉浏览器"这个监听器不会调用 `preventDefault()`"，浏览器因此可以跳过等待 JavaScript 执行完毕就直接执行默认滚动行为，滚动更流畅。对于虚拟列表的 scroll 监听来说，我们确实不需要阻止默认行为，所以标记为 passive 是安全的。
+
+**will-change 的取舍。** `will-change: transform` 提示浏览器提前为元素创建独立的合成层，`translateY` 的变换可以在 GPU 上完成而不触发重排。但它也有代价——每个带 `will-change` 的元素都会占用额外的 GPU 内存。对于虚拟列表这种长期存在的组件，这个开销是值得的；但不要滥用到页面中所有元素上。
+
+**key 的选择。** 始终使用数据的唯一标识（如 `item.id`）或真实索引（`startIndex + i`）作为 key，不要用渲染数组的局部索引（从 0 开始的 `i`）。错误的 key 会导致 React 在 diff 时错误复用 DOM 节点，产生渲染异常。
+
+**横向虚拟列表。** 同样的原理可以应用到横向滚动——把 `scrollTop` 换成 `scrollLeft`，`itemHeight` 换成 `itemWidth`，`height` 换成 `width`。逻辑完全对称。
+
+**何时使用成熟库。** 手写虚拟列表适合理解原理和应对简单场景。如果你的需求涉及动态行高、分组列表、网格布局、窗口虚拟化（windowing）等复杂场景，建议使用 `react-window`（轻量、API 简洁）或 `@tanstack/virtual`（无头、框架无关、灵活性高）。它们在生产环境中经过了大量边界情况的考验。
+
+## 总结
+
+本文从 Class 组件的生命周期出发，建立了"组件从创建到销毁"的认知地图，然后看到 Hooks 如何以更灵活的方式覆盖每个阶段——不是机械地一一对应，而是从"按阶段组织"转向"按逻辑组织"。
+
+这种组织方式的优势在组件变复杂后尤为明显：同一条业务线的状态、副作用、清理逻辑聚合在一起，而不是散落在不同的生命周期方法中。当代码继续膨胀时，自定义 Hook 可以进一步将业务逻辑从组件中剥离，降低复杂度，同时把问题限制在局部作用域内。
+
+React 对副作用的严格态度——Strict Mode 的双重调用——不是刁难开发者，而是在帮助确保每个 effect 都有正确的 cleanup，让组件能安全地反复挂载和卸载。
+
+最终，我们用 `useState`、`useEffect`、`useMemo`、`useCallback` 这四个最基础的 Hook，从零构建了一个能处理百万级数据的虚拟列表组件。理解框架的机制，才能写出真正高性能的组件。

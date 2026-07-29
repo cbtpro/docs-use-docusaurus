@@ -50,3 +50,15 @@ react-live:
   label: 组件
   permalink: /组件
   description: 组件 tag description
+hooks:
+  label: Hooks
+  permalink: /hooks
+  description: React Hooks tag description
+虚拟列表:
+  label: 虚拟列表
+  permalink: /虚拟列表
+  description: 虚拟列表 tag description
+性能优化:
+  label: 性能优化
+  permalink: /性能优化
+  description: 性能优化 tag description
