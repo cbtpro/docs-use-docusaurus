@@ -11,7 +11,7 @@ tags: [facebook, hello, docusaurus]
 
 这里有一些你可能会用到的小技巧。
 
-<!-- truncate -->
+{/* truncate */}
 
 
 只需将 Markdown 文件（或文件夹）添加到 `blog` 目录即可。

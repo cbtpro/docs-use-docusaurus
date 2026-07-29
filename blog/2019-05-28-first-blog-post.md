@@ -8,7 +8,7 @@ tags: [hola, docusaurus]
 
 这是第一篇博客的内容……
 
-<!-- truncate -->
+{/* truncate */}
 
 
 ……更多内容，欢迎补充。
