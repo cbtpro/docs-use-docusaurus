@@ -18,14 +18,22 @@
     "@docusaurus/core": "3.10.2",
     "@docusaurus/faster": "3.10.2",
     "@docusaurus/preset-classic": "3.10.2",
+    "@glideapps/glide-data-grid": "6.0.3",
     "@mdx-js/react": "^3.0.0",
     "@tanstack/react-virtual": "^3.14.9",
+    "ag-grid-community": "32.3.3",
+    "ag-grid-react": "32.3.3",
     "antd": "^6.5.2",
+    "canvas-datagrid": "0.4.7",
     "clsx": "^2.0.0",
+    "lodash": "4.17.21",
+    "marked": "4.3.0",
     "prism-react-renderer": "^2.3.0",
+    "rc-virtual-list": "3.19.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-live": "^4.1.8",
+    "react-responsive-carousel": "3.2.23",
     "use-vue-component": "git+git@github.com:cbtpro/use-vue-component.git",
     "vue": "^3.5.18",
     "vue-loader": "^17.4.2"
@@ -34,8 +42,16 @@
     "@docusaurus/module-type-aliases": "3.8.1",
     "@docusaurus/tsconfig": "3.8.1",
     "@docusaurus/types": "3.8.1",
+    "@types/lodash": "4.17.16",
     "@vitejs/plugin-vue": "^6.0.1",
     "typescript": "~5.6.2"
+  },
+  "overrides": {
+    "@glideapps/glide-data-grid": {
+      "react": "^19.0.0",
+      "react-dom": "^19.0.0",
+      "marked": "4.3.0"
+    }
   },
   "browserslist": {
     "production": [
@@ -44,9 +60,9 @@
       "not op_mini all"
     ],
     "development": [
-      "last 3 chrome version",
-      "last 3 firefox version",
-      "last 5 safari version"
+      "last 3 chrome versions",
+      "last 3 firefox versions",
+      "last 5 safari versions"
     ]
   },
   "engines": {

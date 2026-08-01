@@ -11,6 +11,7 @@ tags:
 ---
 
 import VirtualListDemo from '@site/src/components/virtual-list/Demo';
+import BrowserOnly from '@docusaurus/BrowserOnly';
 
 # ReactJS 组件开发最佳实践 — 从生命周期到虚拟列表
 
@@ -461,7 +462,9 @@ const dynamicOverscan = overscan + Math.floor(Math.min(velocity, 10) * 5);
 
 下面的示例对比了普通列表和虚拟列表在处理大量数据时的表现。你可以调节数据量、行高和容器高度，观察两者在渲染 DOM 数量和滚动流畅度上的差异：
 
-<VirtualListDemo />
+<BrowserOnly fallback={<div style={{ padding: 24, border: '1px dashed #d1d5db', borderRadius: 8, color: '#6b7280', textAlign: 'center' }}>虚拟列表演示组件加载中（需在客户端运行）...</div>}>
+  {() => <VirtualListDemo />}
+</BrowserOnly>
 
 ## 定高虚拟列表完整代码
 
@@ -610,6 +613,40 @@ export default function VirtualList<T>({
 **何时使用成熟库。** 手写虚拟列表适合理解原理和应对简单场景。如果你的需求涉及动态行高、分组列表、网格布局、窗口虚拟化（windowing）等复杂场景，建议使用 `react-window`（轻量、API 简洁）或 `@tanstack/virtual`（无头、框架无关、灵活性高）。它们在生产环境中经过了大量边界情况的考验。
 
 **浏览器兼容性。** 上述方案依赖的 `IntersectionObserver`、`ResizeObserver`、`requestAnimationFrame` 等现代浏览器 API，在现代浏览器中已得到广泛支持，但在旧版浏览器（如 IE 11 及更早）中不可用。成熟库通常会内置兼容方案：`react-window` 和 `@tanstack/virtual` 会针对旧浏览器降级到 scroll 事件计算策略，并提供相应的 polyfill。如果你的项目需要支持旧版浏览器，优先选择成熟库而非手写实现，可以省去单独处理兼容性的负担。
+
+**超大列表的浏览器高度限制。** 这是一个容易被忽视但极其关键的问题。浏览器对单个 DOM 元素的 `scrollHeight` 有硬上限：Chrome/Safari 约 33,554,431 px（2^25），Firefox 更低，约 11,000,000 px。当 `itemCount × itemHeight` 超过这个值时，撑开滚动区域的容器高度会被截断，`scrollTop` 到不了底部，用户永远无法滚动到最后一条数据。
+
+以 50 万条数据、每行 36px 为例：总高度 = 18,000,000px，超过了 Firefox 的限制。用户滚动到约第 466,033 条时就到底了——因为 466,033 × 36 ≈ 16,777,188px，正好卡在浏览器的截断点附近。
+
+这个问题在 TanStack Virtual 的官方 issue（[#616](https://github.com/TanStack/virtual/issues/616)）中也有大量讨论，至今仍是虚拟列表领域的一个已知难题。
+
+**解决方案：自定义滚动机制。** 当总高度超过浏览器限制时，不再依赖浏览器原生滚动，而是自己管理滚动位置。核心思路分三步：
+
+1. **`overflow: hidden`** — 关闭容器的原生滚动，用一个纯 JS 变量 `scrollPosition` 记录当前滚动位置，它的取值范围是 `0 ~ totalHeight - viewportHeight`，不受任何浏览器限制。
+
+2. **自定义滚动条** — 在容器右侧渲染一个 Track + Thumb 组成的滚动条。Thumb 的大小按 `viewportHeight / totalHeight` 比例计算（不小于 16px 保证可拖拽），位置按 `scrollPosition / maxScrollPosition` 比例定位。用户拖拽 Thumb 或点击 Track 时，换算回 `scrollPosition`。
+
+3. **`wheel` 事件驱动** — 监听鼠标滚轮事件，将 `deltaY` 累加到 `scrollPosition` 上。
+
+渲染定位是这套方案最精妙的地方。每个可见项的位置用 `top = startIndex × itemHeight - scrollPosition` 计算。虽然 `startIndex × itemHeight` 和 `scrollPosition` 都可能是上千万的大数值，但**相减后的结果始终在视口范围内**（`-itemHeight ~ viewportHeight`），不存在浮点精度问题，也不会出现科学计数法。
+
+```tsx
+// 自定义滚动模式下的渲染定位
+// 两个大数相减，结果始终在视口范围内，无精度问题
+const offsetY = startIndex * itemHeight - scrollPosition;
+
+return (
+  <div style={{ overflow: 'hidden', position: 'relative' }} onWheel={handleWheel}>
+    <div style={{ position: 'absolute', top: offsetY }}>
+      {visibleItems.map(/* ... */)}
+    </div>
+  </div>
+);
+```
+
+需要注意，自定义滚动条需要自行处理无障碍访问（键盘导航）和触摸设备支持，这是相比原生滚动的额外成本。一个更激进的选择是完全不使用 DOM 滚动，改用 Canvas 渲染——对于百万级数据的表格场景（如 CSV 编辑器），这往往是最终方案。
+
+参考实现可以看 [SmoothCSV 作者的这篇文章](https://dev.to/kohii/how-to-implement-virtual-scrolling-beyond-the-browsers-limit-16ol)，以及 TanStack Virtual 正在进行的 [scroll-scaling PR](https://github.com/TanStack/virtual/pull/1172)。
 
 ## 总结
 
