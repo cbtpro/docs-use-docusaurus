@@ -62,3 +62,15 @@ hooks:
   label: 性能优化
   permalink: /性能优化
   description: 性能优化 tag description
+antd:
+  label: Ant Design
+  permalink: /antd
+  description: Ant Design tag description
+日历:
+  label: 日历
+  permalink: /日历
+  description: 日历 tag description
+算法:
+  label: 算法
+  permalink: /算法
+  description: 算法 tag description
