@@ -1,0 +1,181 @@
+---
+title: CRUD 之外 - 表单详情页的新建、详情、编辑三模式复用
+authors: [cbtpro]
+description: 复用新建、详情与编辑字段，管理已保存记录和表单草稿，处理加载、条件字段、日期转换与操作栏。
+tags:
+  - crud
+  - 前端
+  - react
+  - antd
+  - 表单
+  - 状态管理
+  - 工程实践
+  - 鲁棒性
+---
+
+import FormModesDemo from '@site/src/components/formModes/FormModesDemo'
+import StickyActionsDemo from '@site/src/components/formModes/StickyActionsDemo'
+import ConditionalFieldsDemo from '@site/src/components/formModes/ConditionalFieldsDemo'
+
+新建、详情和编辑页通常共享大部分字段。把字段、校验和布局放在一个组件中，再由模式控制读写行为，可以减少重复维护。详情页属于查询结果展示，与 CRUD 中的 Read 对应。
+
+下面的演示使用本地记录模拟接口：新建提交或编辑保存后进入详情，取消编辑恢复已保存的值。
+
+{/* truncate */}
+
+<FormModesDemo />
+
+## 保存记录与编辑草稿
+
+页面至少要区分“已保存记录”和“当前表单值”。进入编辑时把记录复制进表单，保存成功后用接口返回值更新记录，取消则恢复这份快照。
+
+```tsx
+const [record, setRecord] = useState<FormRecord | null>(null)
+const [mode, setMode] = useState<'create' | 'detail' | 'edit'>('create')
+const [form] = Form.useForm<FormRecord>()
+
+const beginEdit = () => {
+  if (!record) return
+  form.resetFields()
+  form.setFieldsValue(record)
+  setMode('edit')
+}
+
+const cancelEdit = () => {
+  if (!record) return
+  form.resetFields()
+  form.setFieldsValue(record)
+  setMode('detail')
+}
+
+const save = async (values: FormRecord) => {
+  const saved = await saveRecord(values)
+  setRecord(saved)
+  form.setFieldsValue(saved)
+  setMode('detail')
+}
+```
+
+`resetFields` 恢复初始化值，并清理字段状态；接口异步返回的数据用 `setFieldsValue` 回填。保存期间禁用字段和模式切换，保留当前提交对象，失败后让用户继续修改。
+
+路由驱动的页面可以从 recordId 和 editable 派生模式。切换 recordId 时重新进入加载态，并恢复该记录的默认展示模式；用路由 key 重挂载页面也是一种直接的处理方式。
+
+## 详情加载与请求生命周期
+
+```tsx title="按记录 ID 加载"
+useEffect(() => {
+  let active = true
+  form.resetFields()
+  setRecord(null)
+  setEditable(!recordId)
+  setError(null)
+  if (!recordId) {
+    setLoading(false)
+    return
+  }
+  setLoading(true)
+  void (async () => {
+    try {
+      const result = await getFormRecord(recordId)
+      if (!active) return
+      if (!result) {
+        setError('记录不存在或已被删除')
+        return
+      }
+      setRecord(result)
+      form.setFieldsValue(toFormValues(result))
+    } catch (error) {
+      if (active) setError('加载详情失败，请重试')
+    } finally {
+      if (active) setLoading(false)
+    }
+  })()
+  return () => { active = false }
+}, [recordId, form])
+```
+
+页面在 loading、error 和成功状态下分别展示加载反馈、错误提示和表单。记录不存在时提供返回列表或新建入口；选择新建后再切换路由，避免仍带旧 ID 发更新请求。
+
+`active` 让旧请求在切换记录或卸载后停止写状态。请求库支持 signal 时，可以同时用 AbortController 取消等待和响应解析。服务端已开始的写操作仍需通过事务与幂等处理，前端取消不代表服务端撤销。
+
+## 详情显示可读文本
+
+详情模式用普通文本展示姓名、枚举名称和日期，保留复制能力。输入模式使用同一份字段布局中的控件。`Form disabled` 适合保留控件外观的只读页面；纯文本详情则显式切换渲染。
+
+```tsx
+const city = Form.useWatch('city', form)
+const cityLabel = CITY_OPTIONS.find((option) => option.value === city)?.label ?? '-'
+
+<Form.Item label="所在城市" name="city">
+  {mode === 'detail' ? <span>{cityLabel}</span> : <Select options={CITY_OPTIONS} />}
+</Form.Item>
+```
+
+日期在进入和离开表单时转换。antd DatePicker 使用 dayjs，后端使用日期字符串时：
+
+```tsx
+const toFormValues = (record: RecordDto) => ({
+  ...record,
+  birthday: record.birthday ? dayjs(record.birthday) : null,
+})
+const toPayload = (values: FormValues) => ({
+  ...values,
+  birthday: values.birthday?.format('YYYY-MM-DD') ?? null,
+})
+```
+
+生日这类日历日期使用 `YYYY-MM-DD`，具体时刻则按接口约定处理时区。两种数据分别定义，转换逻辑会更清楚。
+
+## 条件字段的生命周期
+
+<ConditionalFieldsDemo />
+
+用户类型为企业员工时显示公司和职位，切回个人用户时丢弃这两个值。字段可以直接使用 `preserve={false}`：
+
+```tsx
+const role = Form.useWatch('role', form)
+
+{role === 'enterprise' && (
+  <>
+    <Form.Item name="company" label="公司" preserve={false}
+      rules={[{ required: true, message: '请填写公司名称' }]}>
+      <Input />
+    </Form.Item>
+    <Form.Item name="jobTitle" label="职位" preserve={false}>
+      <Input />
+    </Form.Item>
+  </>
+)}
+```
+
+提交时再按当前角色构造允许的字段，接口数据范围就与业务分支一致。已卸载字段的校验与仅设置 `hidden` 的字段不同：hidden 字段仍然注册并参与收集和校验；默认 preserve 则保留卸载字段的 store 值，可通过 `getFieldsValue(true)` 读到。
+
+## 动态项与操作位置
+
+联系方式等重复结构使用 Form.List。`field.key` 作为 React key，`field.name` 作为当前索引：
+
+```tsx
+<Form.List name="contacts">
+  {(fields, { add, remove }) => (
+    <>
+      {fields.map((field) => (
+        <Space key={field.key} align="baseline">
+          <Form.Item name={[field.name, 'value']} rules={[{ required: true }]}>
+            <Input disabled={mode === 'detail'} />
+          </Form.Item>
+          {mode !== 'detail' && <Button onClick={() => remove(field.name)}>移除</Button>}
+        </Space>
+      ))}
+      {mode !== 'detail' && <Button onClick={() => add()}>添加联系方式</Button>}
+    </>
+  )}
+</Form.List>
+```
+
+长表单的保存按钮可放在吸底操作栏，返回、编辑等页面级操作放在顶部。下面的操作栏首次隐藏浮动效果，滚动后吸底，底部进入视口时恢复原位；栏高度一直保留，切换时表单不会跳动。
+
+<StickyActionsDemo />
+
+“取消编辑”恢复进入编辑时的快照；“重新加载”获取服务器最新数据。这两个操作分开命名，用户就能预期自己的改动会如何处理。记录有版本字段时，保存回传读取时的版本，发生冲突后保留草稿供用户比较。
+
+参考：[action-in-reactjs 表单模块](https://github.com/cbtpro/action-in-reactjs/tree/main/apps/web/src/pages/form)。交互演示位于本站 `src/components/formModes`。

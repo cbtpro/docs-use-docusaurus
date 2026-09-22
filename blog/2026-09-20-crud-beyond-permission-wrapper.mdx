@@ -1,0 +1,138 @@
+---
+title: CRUD 之外 - 按钮级权限的统一封装
+authors: [cbtpro]
+description: 集中角色与业务状态判断，用 Hook、HOC 和 Guard 接入界面，并处理禁用按钮的键盘交互与确认弹窗。
+tags:
+  - crud
+  - 权限
+  - 前端
+  - react
+  - antd
+  - 状态管理
+  - 工程实践
+  - 鲁棒性
+---
+
+import PermissionDemo from '@site/src/components/permission/Demo'
+import PopoverConfirmDemo from '@site/src/components/permission/PopoverConfirmDemo'
+
+列表上的编辑、删除和审批按钮，既受角色限制，也受记录状态限制。如果每个按钮都自己判断，很容易出现同一个角色在不同页面表现不一致。
+
+这里把角色权限放进纯函数，再用 Hook 和组件接到界面。演示允许切换角色，只用于观察 UI；实际接口必须在服务端独立鉴权。
+
+{/* truncate */}
+
+<PermissionDemo />
+
+## 先写清判断规则
+
+本页采用这些规则：`codes` 中任一权限满足就通过；未指定非空 `codes` 时才检查 `roles`；两者都未指定表示没有角色限制。管理员可以通过角色检查，但仍需满足 `customFn` 的业务条件。空数组在这里表示“不加限制”。权限尚未加载时，由外层加载状态暂停渲染操作区。
+
+下面的代码与本页演示组件一致，类型和矩阵在 `src/components/permission` 中。
+
+```ts title="permissionUtils.ts"
+export function hasPermission<T = unknown>(params: HasPermissionParams<T>): boolean {
+  const { userRoles, codes, roles, customFn, extra } = params
+  const isAdmin = userRoles.includes('admin')
+  let matrixPass = true
+  if (codes && codes.length > 0) {
+    matrixPass = isAdmin || codes.some((code) =>
+      (PERMISSION_MATRIX[code] ?? []).some((role) => userRoles.includes(role)),
+    )
+  } else if (roles && roles.length > 0) {
+    matrixPass = isAdmin || roles.some((role) => userRoles.includes(role))
+  }
+  if (!matrixPass) return false
+  return !customFn || customFn(userRoles, extra)
+}
+```
+
+`PermissionCode` 用联合类型约束拼写，例如 `record:edit`、`record:export`。角色到动作的映射集中放在 `PERMISSION_MATRIX`，业务状态通过 `extra` 传给 `customFn`。这套矩阵是演示策略，真实系统也可以由服务端返回权限码。
+
+管理员在这份演示中拥有全部角色权限。有职责分离要求的系统，可以让管理员也按矩阵逐项匹配，再由业务条件控制记录状态。
+
+## Hook 提供两种调用方式
+
+`usePermission(options)` 从 Context 读取当前角色，返回本次判断的 `hasAuth`；`check(options)` 用于过滤操作列表。它们都调用同一个纯函数，避免两套规则。
+
+```tsx
+const { hasAuth: canEdit, check } = usePermission({ codes: ['record:edit'] })
+const visibleActions = actions.filter((action) =>
+  check({ ...action.permission, extra: record }),
+)
+```
+
+本页用 Context 保持演示独立。业务项目已有 Redux 时可以订阅角色字段，无需为权限封装再引入一个状态库。
+
+## 重复使用 HOC，局部内容用 Guard
+
+```tsx
+const EditButton = withPermission<{ status: string }>({
+  codes: ['record:edit'],
+  fallback: 'disable',
+  customFn: (_, record) => record?.status === '草稿',
+})(Button)
+
+<EditButton extra={record} onClick={handleEdit}>编辑</EditButton>
+
+<PermissionGuard codes={['system:user-manage']} fallback="hide">
+  <Button onClick={handleUserManage}>用户管理</Button>
+</PermissionGuard>
+```
+
+HOC 应在组件外定义，避免每次渲染创建新的组件类型。Guard 适合只用一次的 JSX。两者共用相同的 Hook 和判断逻辑，按复用范围选择即可。
+
+演示 HOC 允许运行时参数覆盖静态配置，包括权限码和 `customFn`。可覆盖参数用于业务组合，固定规则保留在封装内部，后端继续独立鉴权。
+
+## 禁用要同时处理鼠标和键盘
+
+只有 `pointer-events: none` 不够：子按钮仍可能通过 Tab 聚焦，再由 Enter 或空格触发。把它放在 Tooltip 的触发元素上，还会让鼠标提示失效。
+
+本页用外层元素显示提示，内层 `inert` 禁止后代获得焦点和交互：
+
+```tsx title="fallback.tsx"
+<Tooltip title={tooltipText ?? '暂无操作权限'} trigger={['hover', 'focus']}>
+  <span
+    aria-disabled="true"
+    tabIndex={0}
+    onClickCapture={(event) => {
+      event.preventDefault()
+      event.stopPropagation()
+    }}
+    style={{ display: 'inline-block', opacity: 0.5, cursor: 'not-allowed' }}
+  >
+    <span inert style={{ display: 'inline-block', pointerEvents: 'none' }}>
+      {content}
+    </span>
+  </span>
+</Tooltip>
+```
+
+这里面向支持 `inert` 的浏览器。若要支持旧环境，需要相应兼容处理；包装原生按钮时，直接使用 `disabled` 也很合适。`aria-disabled` 只描述状态，不会自行拦截操作。[inert 的行为说明](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/inert)包括从焦点顺序和无障碍树中排除子内容，因此外层提示应清楚说明原因。
+
+Portal 弹层和异步副作用按各自的生命周期管理。权限撤销时，关闭操作弹层，并取消尚未执行的任务；需要完整移除时使用 hide 模式。
+
+## 更多操作与二次确认
+
+<PopoverConfirmDemo />
+
+Dropdown 菜单可以先过滤权限，再渲染可见项；全部不可用时同时隐藏触发器。Popover 适合放说明和表单片段。Dropdown 的 label 和 Tooltip 的 title 都支持 ReactNode；菜单操作用 Dropdown，带表单或较多说明的面板用 Popover。
+
+删除确认可以将整个 Popconfirm 包进权限组件：
+
+```tsx
+const DeleteWithConfirm = withPermission({
+  codes: ['record:delete'],
+  fallback: 'hide',
+})(Popconfirm)
+
+<DeleteWithConfirm title="确定删除？" onConfirm={handleDelete}>
+  <Button danger>删除</Button>
+</DeleteWithConfirm>
+```
+
+这样权限撤销时触发器和确认层一起卸载。使用命令式 `Modal.confirm` 时，还需考虑弹窗打开后权限或记录状态变化；执行时可以再次检查，最终仍由后端判定。需要继承主题和消息上下文时，使用 `App.useApp()`，并保证外层有 antd 的 `<App>`。
+
+隐藏和禁用是界面取舍：隐藏减少无关入口，禁用可以解释当前为什么不能操作。后端继续校验动作权限和数据范围，界面显示策略与接口授权分别负责各自的部分。
+
+相关实现：[action-in-reactjs 权限模块](https://github.com/cbtpro/action-in-reactjs/tree/main/apps/web/src/permissions)。本页交互演示位于本站 `src/components/permission`。

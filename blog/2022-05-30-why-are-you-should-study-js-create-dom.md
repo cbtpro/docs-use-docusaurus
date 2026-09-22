@@ -6,6 +6,8 @@ tags: [createElement, js, dom]
 
 学习 JavaScript（JS）、HTML 等基础技术依然很重要，尽管如今有许多高级框架和工具可以大大简化开发流程。这是因为：
 
+{/* truncate */}
+
 ## 1. **理解核心原理**
 
 - **框架和工具都是基于基础构建的**：现代前端框架如 React、Vue、Angular 都是基于 JavaScript 和 HTML 的。如果没有对这些基础的深入理解，遇到复杂问题时会很难理解框架背后的原理，也就更难进行调试和优化。

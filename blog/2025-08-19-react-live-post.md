@@ -17,6 +17,8 @@ import Demo3 from '@site/src/components/react-live/Demo3';
 
 你可以在 Docusaurus 的 MDX 文件中这样使用 `ReactLive` 组件，实现代码片段和运行结果的互动演示。
 
+{/* truncate */}
+
 官方文档 https://nearform.com/open-source/react-live/docs/
 
 ### 先实现代码

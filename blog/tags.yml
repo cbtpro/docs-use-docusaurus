@@ -74,3 +74,165 @@ antd:
   label: 算法
   permalink: /算法
   description: 算法 tag description
+crud:
+  label: CRUD
+  permalink: /crud
+  description: 增删改查中的业务设计与实现。
+软件设计:
+  label: 软件设计
+  permalink: /软件设计
+  description: 软件结构、职责划分与设计取舍。
+工程实践:
+  label: 工程实践
+  permalink: /工程实践
+  description: 项目中的实现方案与工程经验。
+鲁棒性:
+  label: 鲁棒性
+  permalink: /鲁棒性
+  description: 异常处理、并发控制与故障恢复。
+前端:
+  label: 前端
+  permalink: /前端
+  description: 浏览器应用的界面与交互开发。
+用户体验:
+  label: 用户体验
+  permalink: /用户体验
+  description: 操作反馈、交互流程与可用性。
+loading:
+  label: Loading
+  permalink: /loading
+  description: 请求加载反馈与等待状态管理。
+状态管理:
+  label: 状态管理
+  permalink: /状态管理
+  description: 应用状态的组织、更新与持久化。
+数据库:
+  label: 数据库
+  permalink: /数据库
+  description: 数据建模、查询与事务处理。
+并发:
+  label: 并发
+  permalink: /并发
+  description: 并发访问、资源协调与一致性。
+乐观锁:
+  label: 乐观锁
+  permalink: /乐观锁
+  description: 版本比较、冲突处理与更新重试。
+搜索:
+  label: 搜索
+  permalink: /搜索
+  description: 搜索条件、查询调度与结果展示。
+防抖:
+  label: 防抖
+  permalink: /防抖
+  description: 连续事件合并与延迟执行。
+表单:
+  label: 表单
+  permalink: /表单
+  description: 字段校验、数据提交与表单复用。
+输入法:
+  label: 输入法
+  permalink: /输入法
+  description: 输入合成事件与中文输入适配。
+权限:
+  label: 权限
+  permalink: /权限
+  description: 角色判断、访问控制与界面反馈。
+滚动:
+  label: 滚动
+  permalink: /滚动
+  description: 滚动容器、位置观察与吸附行为。
+布局:
+  label: 布局
+  permalink: /布局
+  description: 页面结构、尺寸测量与空间分配。
+路由:
+  label: 路由
+  permalink: /路由
+  description: 页面导航、地址参数与访问历史。
+主题切换:
+  label: 主题切换
+  permalink: /主题切换
+  description: 主题偏好、系统设置与外观切换。
+图表:
+  label: 图表
+  permalink: /图表
+  description: 图表渲染、生命周期与数据更新。
+列表编辑:
+  label: 列表编辑
+  permalink: /列表编辑
+  description: 列表场景中的编辑流程与取舍。
+批量:
+  label: 批量
+  permalink: /批量
+  description: 多条记录的选择、编辑与提交。
+动态表单:
+  label: 动态表单
+  permalink: /动态表单
+  description: 动态字段、条件展示与嵌套数据。
+spring:
+  label: Spring
+  permalink: /spring
+  description: Spring 应用的配置、事务与依赖注入。
+java:
+  label: Java
+  permalink: /java
+  description: Java 语言与应用开发。
+后端:
+  label: 后端
+  permalink: /后端
+  description: 服务端接口、数据处理与系统设计。
+验证码:
+  label: 验证码
+  permalink: /验证码
+  description: 验证挑战的生成、存储与校验。
+缓存:
+  label: 缓存
+  permalink: /缓存
+  description: 缓存加载、失效与多层一致性。
+bean:
+  label: Bean
+  permalink: /bean
+  description: Spring Bean 的职责、配置与装配。
+异地登录:
+  label: 异地登录
+  permalink: /异地登录
+  description: 登录风险识别与验证流程。
+数据字典:
+  label: 数据字典
+  permalink: /数据字典
+  description: 字典查询、编码翻译与快照缓存。
+
+jvm:
+  label: JVM
+  permalink: /jvm
+  description: Java 虚拟机与运行时机制。
+垃圾回收:
+  label: 垃圾回收
+  permalink: /垃圾回收
+  description: 对象可达性、回收机制与引用管理。
+资源管理:
+  label: 资源管理
+  permalink: /资源管理
+  description: 外部资源的生命周期与释放。
+cleaner:
+  label: Cleaner
+  permalink: /cleaner
+  description: Java 清理动作与资源释放兜底。
+
+设计原则:
+  label: 设计原则
+  permalink: /设计原则
+  description: 职责划分、依赖管理与代码扩展的设计原则。
+架构:
+  label: 架构
+  permalink: /架构
+  description: 系统结构、模块边界与架构取舍。
+SOLID:
+  label: SOLID
+  permalink: /solid
+  description: 面向对象设计的五项原则及应用。
+微服务:
+  label: 微服务
+  permalink: /微服务
+  description: 服务拆分、跨服务协作与分布式系统设计。

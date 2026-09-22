@@ -2,7 +2,6 @@
 const { VueLoaderPlugin } = require("vue-loader");
 
 module.exports = (content, options) => {
-  console.error('chenfff');
   return {
     name: "docusaurus-plugin-usevue",
     configureWebpack(config, isServer, utils) {

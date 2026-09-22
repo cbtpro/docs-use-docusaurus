@@ -1,0 +1,110 @@
+---
+title: CRUD 之外 - 将批量评分从列表拆到独立表单
+authors: [cbtpro]
+description: 把候选人选择与批量评分分开，使用 Form.List 管理评分卡片，并在补选、重置和提交时保留草稿。
+tags:
+  - crud
+  - 列表编辑
+  - 批量
+  - 动态表单
+  - 前端
+  - react
+  - antd
+  - 工程实践
+  - 鲁棒性
+  - 用户体验
+---
+
+import BatchScoreDemo from '@site/src/components/batchScore/BatchScoreDemo'
+
+面试列表既要检索候选人，又要填写评分和评语。评分项较多、需要统一提交时，单独的评分视图能给输入、校验和草稿留下足够空间。列表负责选择候选人，评分页负责完成这一批评价。
+
+这种拆分适合批量填写。少量字段、逐行独立保存的场景，行内编辑仍然方便；选择依据是保存粒度和编辑过程需要的上下文。
+
+{/* truncate */}
+
+## 列表选择，评分页集中填写
+
+<BatchScoreDemo />
+
+演示在同一组件中切换两个视图。返回列表补选时，按候选人 ID 合并草稿；重置只清空评分与评语，保留候选人；提交完成后清空本次选择。
+
+```tsx title="补选时合并已有草稿"
+const drafts = new Map(
+  (form.getFieldValue('scores') as ScoreItem[] | undefined ?? [])
+    .map((item) => [item.candidateId, item]),
+)
+const scores = selectedCandidates.map((candidate) => ({
+  candidateId: candidate.id,
+  candidateName: candidate.name,
+  position: candidate.position,
+  score: drafts.get(candidate.id)?.score,
+  feedback: drafts.get(candidate.id)?.feedback,
+}))
+form.setFieldsValue({ scores })
+```
+
+候选人 ID 是合并依据，显示顺序变化不影响归属。取消选择会移除该人的评分项；有未保存内容时，产品可以在取消前提示，或者提供撤销。
+
+## 每个候选人一张表单卡片
+
+```tsx title="评分字段"
+<Form form={form} onFinish={handleSubmit} validateTrigger={[]}>
+  <Form.List name="scores">
+    {(fields) => fields.map((field) => (
+      <ScoreCard key={field.key} field={field} form={form} />
+    ))}
+  </Form.List>
+  <Button type="primary" htmlType="submit" loading={submitting}>提交评分</Button>
+</Form>
+```
+
+`validateTrigger={[]}` 关闭字段事件校验，提交时仍统一校验 rules。InputNumber 的 min/max 限制输入体验，Form rules 再明确数值范围，服务端也按同一业务规则校验。
+
+```tsx title="ScoreCard 中的字段片段"
+const candidateName = Form.useWatch(
+  ['scores', field.name, 'candidateName'],
+  { form, preserve: true },
+)
+
+return (
+  <Card title={candidateName}>
+    <Form.Item
+      name={[field.name, 'score']}
+      label="综合评分"
+      rules={[
+        { required: true, message: '请填写评分' },
+        { type: 'number', min: 0, max: 100, message: '评分须在 0 到 100 之间' },
+      ]}
+    >
+      <InputNumber min={0} max={100} />
+    </Form.Item>
+    <Form.Item name={[field.name, 'feedback']} label="评语">
+      <Input.TextArea rows={2} />
+    </Form.Item>
+  </Card>
+)
+```
+
+candidateName 只用于展示，没有注册为独立 Form.Item，因此通过 preserve 订阅保存在 store 中的值。candidateId 随 Form.List 的数据项保存，接口提交时只发送 ID、评分和评语，名称与岗位由服务端核对。
+
+## 重置与提交的语义
+
+```tsx
+const resetScores = () => {
+  const current = form.getFieldValue('scores') as ScoreItem[]
+  form.setFieldValue('scores', current.map(({ score, feedback, ...candidate }) => ({
+    ...candidate, score: undefined, feedback: undefined,
+  })))
+}
+```
+
+候选人是动态写入的，重置评分时显式保留候选人信息。保存期间禁用表单、返回和补选，失败后保留草稿。接口可选择整批事务提交或返回逐项结果；采用逐项结果时，成功项与失败项分别标记，重试只发送失败项并带幂等标识。
+
+## 路由与草稿保存
+
+拆成独立路由时，可以通过 location.state 传递候选人。它依附浏览器历史条目，普通刷新可能保留，但复制链接到新窗口无法带走。需要可分享的入口时，在 URL 中记录业务批次 ID，进入评分页后重新加载候选人及权限。
+
+未保存内容放在路由级草稿状态或服务端草稿中。应用内导航可用当前路由版本支持的 useBlocker 提示，刷新和关闭页面另用 beforeunload。这样列表页可以自由检索，评分页也能保留连续填写的上下文。
+
+Form.List 的结构参考：[action-in-reactjs 表单模块](https://github.com/cbtpro/action-in-reactjs/tree/main/apps/web/src/pages/form)。本页评分演示位于本站 `src/components/batchScore/BatchScoreDemo.tsx`。
