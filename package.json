@@ -27,6 +27,7 @@
     "@tanstack/react-virtual": "^3.14.9",
     "ag-grid-community": "32.3.3",
     "ag-grid-react": "32.3.3",
+    "ant-design-vue": "^4.2.6",
     "antd": "^6.5.2",
     "canvas-datagrid": "0.4.7",
     "clsx": "^2.0.0",

@@ -1,48 +1,24 @@
 ---
-title: 使用vue组件
+title: 在 Docusaurus MDX 里使用 Vue 组件
 authors: [cbtpro]
 tags: [docusaurus]
 ---
 
-Blog posts support [Docusaurus Markdown features](https://docusaurus.io/docs/markdown-features), such as [MDX](https://mdxjs.com/).
+Docusaurus 基于 React,但只要用 [use-vue-component](https://github.com/cbtpro/use-vue-component) 的 `uvc` 把 Vue 单文件组件转成 React 组件,就能在 MDX 里直接渲染。下面记录基本用法和跟 ant-design-vue 交互的示例。
 
 {/* truncate */}
 
-:::tip
+## 基本用法
 
-使用vue组件
+三步:`uvc` 转换器引入 + Vue 单文件组件引入 + `uvc` 包装 + 渲染。
 
 ```html
-
-// 引入转换包
-
 import { uvc } from 'use-vue-component';
-
-// 引入vue组件
-
 import test from '@site/src/components/vue/test.vue';
 
-// 转换
-
 export const HelloWorld = uvc(test);
-
-<HelloWorld />
-
-
-// 引入vue组件
-
-import hello from '@site/src/components/vue/hello.vue';
-
-// 转换
-
-export const Hello = uvc(hello);
-
-// 传参
-<Hello name="john" />
 ```
 
-## 注意，import和export的前后都必须空一行
-
 import { uvc } from 'use-vue-component';
 
 import test from '@site/src/components/vue/test.vue';
@@ -50,10 +26,107 @@ import test from '@site/src/components/vue/test.vue';
 export const HelloWorld = uvc(test);
 
 <HelloWorld />
+
+带 props 的用法,跟 React 组件完全一致:
 
 import hello from '@site/src/components/vue/hello.vue';
 
 export const Hello = uvc(hello);
 
 <Hello name="peter" />
-:::
+
+## 注意事项
+
+MDX 解析要求 `import` 和 `export` 语句前后必须空一行,否则会被当成普通文本渲染。下面是一段错误示例,实际编写时避免:
+
+```html
+// 错误:import 前没有空行,会被解析成文本
+一些文字
+import { uvc } from 'use-vue-component';
+```
+
+正确写法:
+
+```html
+一些文字
+
+import { uvc } from 'use-vue-component';
+```
+
+## 跟 ant-design-vue 交互
+
+Vue 单文件组件内部可以独立用 `ant-design-vue`,在 `<script setup>` 里 `import` 需要的组件,模板里用 PascalCase 写法(`<Button>` 而不是 `<a-button>`),样式通过 `import 'ant-design-vue/dist/reset.css'` 引入。下面三个示例都通过 `uvc` 转换后在 MDX 里渲染。
+
+```html
+// Vue 组件内部用 ant-design-vue
+import { Button, Modal, Input } from 'ant-design-vue';
+import 'ant-design-vue/dist/reset.css';
+```
+
+import buttonCounter from '@site/src/components/vue/AntdButtonCounter.vue';
+
+import modalDemo from '@site/src/components/vue/AntdModalDemo.vue';
+
+import formDemo from '@site/src/components/vue/AntdFormDemo.vue';
+
+import clickOutDemo from '@site/src/components/vue/ClickOutDemo.vue';
+
+export const AntdButtonCounter = uvc(buttonCounter);
+
+export const AntdModalDemo = uvc(modalDemo);
+
+export const AntdFormDemo = uvc(formDemo);
+
+export const ClickOutDemo = uvc(clickOutDemo);
+
+### 按钮点击计数
+
+点击按钮,计数累加,展示 Alert 反馈。
+
+<AntdButtonCounter />
+
+### 弹出 Modal
+
+点击按钮打开 antd Modal,Modal 里展示当前时间,带确认/取消按钮。
+
+<AntdModalDemo />
+
+### 表单提交
+
+输入框 + 提交按钮,提交后弹出 Modal 反馈结果。按钮在输入为空时禁用。
+
+<AntdFormDemo />
+
+## 自定义指令 v-click-out
+
+Vue 3 在 `<script setup>` 里,任何以 `v` 开头的驼峰命名变量会被识别为自定义指令,模板里用 kebab-case 引用(`vClickOut` → `v-click-out`)。下面实现一个点击元素外部触发回调的指令,挂在自定义下拉菜单上:打开菜单后,点击菜单外部任意位置自动关闭。
+
+```html
+const vClickOut = {
+  beforeMount(el, binding) {
+    console.log('[v-click-out] beforeMount,绑定值:', binding.value);
+    el._clickOutHandler = (e) => {
+      if (el !== e.target && !el.contains(e.target)) {
+        console.log('[v-click-out] 检测到外部点击,触发回调', e.target);
+        binding.value(e);
+      }
+    };
+    setTimeout(() => {
+      console.log('[v-click-out] 挂监听 document click');
+      document.addEventListener('click', el._clickOutHandler);
+    });
+  },
+  unmounted(el) {
+    console.log('[v-click-out] unmounted,移除监听');
+    document.removeEventListener('click', el._clickOutHandler);
+  },
+};
+```
+
+要点:挂监听用 `setTimeout` 延迟一帧,避免打开按钮的 `click` 事件冒泡到 document 立即触发关闭;`unmounted` 钩子必须移除监听,防止组件卸载后内存泄漏。各钩子里加 `console.log`,打开浏览器控制台可观察指令的挂载、触发、卸载路径,方便排查问题。
+
+### 点击外部关闭菜单
+
+打开菜单后,点击菜单以外的任意位置,菜单自动关闭。
+
+<ClickOutDemo />

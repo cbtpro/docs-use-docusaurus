@@ -39,9 +39,9 @@ export default function MyReactPage() {
 在 `src/pages/my-markdown-page.md` 创建一个文件：
 
 ```mdx title="src/pages/my-markdown-page.md"
-# My Markdown page
+# 我的 Markdown 页面
 
-This is a Markdown page
+这是一个 Markdown 页面
 ```
 
 

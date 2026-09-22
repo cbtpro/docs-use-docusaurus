@@ -41,7 +41,7 @@ sidebar_position: 3
 
 # Hello
 
-This is my **first Docusaurus document**!
+这是我的**第一篇 Docusaurus 文档**！
 ```
 
 

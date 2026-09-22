@@ -7,7 +7,7 @@ import useVuePlugin from './plugins/use-vue';
 
 const config: Config = {
   title: 'Reactjs最佳实践',
-  tagline: 'Dinosaurs are cool',
+  tagline: '记录中后台 CRUD 之外的工程细节',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -38,8 +38,8 @@ const config: Config = {
   // useful metadata like html lang. For example, if your site is Chinese, you
   // may want to replace "en" with "zh-Hans".
   i18n: {
-    defaultLocale: 'en',
-    locales: ['en'],
+    defaultLocale: 'zh-Hans',
+    locales: ['zh-Hans'],
   },
 
   presets: [
@@ -104,7 +104,7 @@ const config: Config = {
           },
           {
             href: 'https://blog.chenbitao.com/',
-            label: 'github-pages',
+            label: '个人博客',
             position: 'right'
           },
           {
@@ -127,7 +127,7 @@ const config: Config = {
           ],
         },
         {
-          title: 'Community',
+          title: '社区',
           items: [
             {
               label: 'Stack Overflow',
@@ -147,7 +147,7 @@ const config: Config = {
           title: '更多',
           items: [
             {
-              label: 'Blog',
+              label: '博客',
               to: '/blog',
             },
             {
@@ -157,7 +157,7 @@ const config: Config = {
           ],
         },
       ],
-        copyright: `Copyright © ${new Date().getFullYear()} cbtpro, Inc. Built with Docusaurus.`,
+        copyright: `版权所有 © ${new Date().getFullYear()} cbtpro, Inc. 基于 Docusaurus 构建。`,
     },
     prism: {
       theme: prismThemes.github,
