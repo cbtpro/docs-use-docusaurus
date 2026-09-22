@@ -16,15 +16,16 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://docs-use-docusaurus.vercel.app/',
+  url: process.env.SITE_URL || 'https://docs-use-docusaurus.vercel.app/',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: process.env.BASE_URL || '/',
+  trailingSlash: true,
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'facebook', // Usually your GitHub org/user name.
-  projectName: 'docusaurus', // Usually your repo name.
+  organizationName: 'cbtpro',
+  projectName: 'docs-use-docusaurus',
 
   onBrokenLinks: 'throw',
   markdown: {
@@ -52,6 +53,8 @@ const config: Config = {
           editUrl: 'https://github.com/cbtpro/docs-use-docusaurus/tree/main/docs',
         },
         blog: {
+          blogSidebarTitle: '全部博客',
+          blogSidebarCount: 'ALL',
           showReadingTime: true,
           feedOptions: {
             type: ['rss', 'atom'],
