@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkdocs_use_docusaurus=self.webpackChunkdocs_use_docusaurus||[]).push([["6017"],{85638(s){s.exports=JSON.parse('{"metadata":{"permalink":"/docs-use-docusaurus/blog","page":1,"postsPerPage":10,"totalPages":1,"totalCount":10,"blogDescription":"Blog","blogTitle":"Blog"}}')}}]);

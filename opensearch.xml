@@ -4,8 +4,8 @@
   <ShortName>Reactjs最佳实践</ShortName>
   <Description>Search Reactjs最佳实践</Description>
   <InputEncoding>UTF-8</InputEncoding>
-  <Image width="16" height="16" type="image/x-icon">https://docs-use-docusaurus.vercel.app/docs-use-docusaurus/img/favicon.ico</Image>
-  <Url type="text/html" method="get" template="https://docs-use-docusaurus.vercel.app/docs-use-docusaurus/search?q={searchTerms}"/>
-  <Url type="application/opensearchdescription+xml" rel="self" template="https://docs-use-docusaurus.vercel.app/docs-use-docusaurus/opensearch.xml" />
-  <moz:SearchForm>https://docs-use-docusaurus.vercel.app/docs-use-docusaurus/</moz:SearchForm>
+  <Image width="16" height="16" type="image/x-icon">https://cbtpro.github.io/docs-use-docusaurus/img/favicon.ico</Image>
+  <Url type="text/html" method="get" template="https://cbtpro.github.io/docs-use-docusaurus/search?q={searchTerms}"/>
+  <Url type="application/opensearchdescription+xml" rel="self" template="https://cbtpro.github.io/docs-use-docusaurus/opensearch.xml" />
+  <moz:SearchForm>https://cbtpro.github.io/docs-use-docusaurus/</moz:SearchForm>
 </OpenSearchDescription>
