@@ -8,24 +8,7 @@ import { createDataWorker } from './createDataWorker';
 // SSR 不安全组件（顶层访问 window/document）改为动态 import，避免 server bundle 打包
 type AsyncComp = React.ComponentType<{ items: any; height: number; itemHeight: number }>;
 const loadGlide = () => import('./GlideDataGridDemo').then(m => m.default as AsyncComp);
-// canvas-datagrid 模块顶层会执行 customElements.define('canvas-datagrid', ...)
-// HMR 重新加载模块时会因重复定义抛错，这里在 import 前做防御：
-// 若已定义过，临时将 define 替换为 no-op，import 后恢复
-const loadCanvasDatagrid = async (): Promise<AsyncComp> => {
-  const ce = window.customElements;
-  if (ce && ce.get('canvas-datagrid')) {
-    const origDefine = ce.define.bind(ce);
-    ce.define = (() => {}) as typeof ce.define;
-    try {
-      const m = await import('./CanvasDatagridDemo');
-      return m.default as AsyncComp;
-    } finally {
-      ce.define = origDefine;
-    }
-  }
-  const m = await import('./CanvasDatagridDemo');
-  return m.default as AsyncComp;
-};
+const loadCanvasDatagrid = () => import('./CanvasDatagridDemo').then(m => m.default as AsyncComp);
 const loadAgGrid = () => import('./AgGridDemo').then(m => m.default as AsyncComp);
 const loadRcVirtual = () => import('./RcVirtualListDemo').then(m => m.default as AsyncComp);
 
@@ -167,6 +150,7 @@ export default function VirtualListDemo() {
     if (!loader || loadedRef.current.has(activeTab)) return;
     loadedRef.current.add(activeTab);
 
+    setAsyncError((s) => ({ ...s, [activeTab]: undefined }));
     setAsyncLoading((s) => ({ ...s, [activeTab]: true }));
     loader()
       .then((Comp) => {
