@@ -1,16 +1,26 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Progress, Radio, InputNumber } from 'antd';
-import VirtualList from './VirtualList';
-import TanstackVirtualList from './TanstackVirtualList';
-import CanvasVirtualList from './CanvasVirtualList';
 import { createDataWorker } from './createDataWorker';
 
-// SSR 不安全组件（顶层访问 window/document）改为动态 import，避免 server bundle 打包
-type AsyncComp = React.ComponentType<{ items: any; height: number; itemHeight: number }>;
+// 所有 tab 组件统一改为动态 import,避免 server bundle 打包 + 按需加载减小首屏
+type AsyncComp = React.ComponentType<{ items: any; height: number; itemHeight: number; renderItem?: any }>;
+const loadVirtual = () => import('./VirtualList').then(m => m.default as AsyncComp);
+const loadTanstack = () => import('./TanstackVirtualList').then(m => m.default as AsyncComp);
+const loadCanvas = () => import('./CanvasVirtualList').then(m => m.default as AsyncComp);
 const loadGlide = () => import('./GlideDataGridDemo').then(m => m.default as AsyncComp);
 const loadCanvasDatagrid = () => import('./CanvasDatagridDemo').then(m => m.default as AsyncComp);
 const loadAgGrid = () => import('./AgGridDemo').then(m => m.default as AsyncComp);
 const loadRcVirtual = () => import('./RcVirtualListDemo').then(m => m.default as AsyncComp);
+
+const LOADERS: Record<string, () => Promise<AsyncComp>> = {
+  virtual: loadVirtual,
+  tanstack: loadTanstack,
+  canvas: loadCanvas,
+  glide: loadGlide,
+  canvasDatagrid: loadCanvasDatagrid,
+  aggrid: loadAgGrid,
+  rcvirtual: loadRcVirtual,
+};
 
 const COUNT_PRESETS = [
   { label: '1K', value: 1_000 },
@@ -126,27 +136,16 @@ export default function VirtualListDemo() {
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
 
-  // 异步加载的 4 个 SSR 不安全组件（tab 切换后才 import）
-  const [asyncComps, setAsyncComps] = useState<{
-    glide?: AsyncComp;
-    canvasDatagrid?: AsyncComp;
-    aggrid?: AsyncComp;
-    rcvirtual?: AsyncComp;
-  }>({});
+  // 异步加载的所有 tab 组件(切到对应 tab 才 import)
+  const [asyncComps, setAsyncComps] = useState<Partial<Record<Tab, AsyncComp>>>({});
   const [asyncLoading, setAsyncLoading] = useState<Partial<Record<Tab, boolean>>>({});
   const [asyncError, setAsyncError] = useState<Partial<Record<Tab, string>>>({});
 
-  // 需要时才动态 import SSR 不安全组件（避免 window/document 在 server bundle 中引用）
-  // 用 ref 记录已加载/加载中的组件，避免依赖 state 触发 effect 重跑导致 cancelled 误杀 promise
+  // 需要时才动态 import 组件,避免 server bundle 引用 window/document
+  // 用 ref 记录已加载/加载中的组件,避免依赖 state 触发 effect 重跑导致 cancelled 误杀 promise
   const loadedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const loaders: Record<string, () => Promise<AsyncComp>> = {
-      glide: loadGlide,
-      canvasDatagrid: loadCanvasDatagrid,
-      aggrid: loadAgGrid,
-      rcvirtual: loadRcVirtual,
-    };
-    const loader = loaders[activeTab];
+    const loader = LOADERS[activeTab];
     if (!loader || loadedRef.current.has(activeTab)) return;
     loadedRef.current.add(activeTab);
 
@@ -372,21 +371,32 @@ export default function VirtualListDemo() {
                 数据占用 {formatSize(dataSize)}
               </span>
             </div>
-            <VirtualList<DataItem>
-              items={data}
-              itemHeight={itemHeight}
-              height={containerHeight}
-              renderItem={(item) => (
-                <div style={styles.row}>
-                  <span>{item.name}</span>
-                  <span style={styles.roleText}>
-                    {item.role}
-                  </span>
-                </div>
-              )}
-            />
+            {asyncLoading.virtual ? (
+              <div style={loaderBoxStyle}>加载虚拟列表组件...</div>
+            ) : asyncError.virtual ? (
+              <div style={{ ...loaderBoxStyle, color: '#dc2626' }}>加载失败:{asyncError.virtual}</div>
+            ) : asyncComps.virtual ? (
+              (() => {
+                const Comp = asyncComps.virtual!;
+                return (
+                  <Comp
+                    items={data}
+                    itemHeight={itemHeight}
+                    height={containerHeight}
+                    renderItem={(item: DataItem) => (
+                      <div style={styles.row}>
+                        <span>{item.name}</span>
+                        <span style={styles.roleText}>
+                          {item.role}
+                        </span>
+                      </div>
+                    )}
+                  />
+                );
+              })()
+            ) : null}
             <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
-              * 快速滚动时缓冲区自动扩大，渲染节点数会临时增加
+              * 快速滚动时缓冲区自动扩大,渲染节点数会临时增加
             </p>
           </div>
         )}
@@ -414,21 +424,32 @@ export default function VirtualListDemo() {
                 数据占用 {formatSize(dataSize)}
               </span>
             </div>
-            <TanstackVirtualList<DataItem>
-              items={data}
-              itemHeight={itemHeight}
-              height={containerHeight}
-              renderItem={(item) => (
-                <div style={styles.row}>
-                  <span>{item.name}</span>
-                  <span style={styles.roleText}>
-                    {item.role}
-                  </span>
-                </div>
-              )}
-            />
+            {asyncLoading.tanstack ? (
+              <div style={loaderBoxStyle}>加载 @tanstack/react-virtual 组件...</div>
+            ) : asyncError.tanstack ? (
+              <div style={{ ...loaderBoxStyle, color: '#dc2626' }}>加载失败:{asyncError.tanstack}</div>
+            ) : asyncComps.tanstack ? (
+              (() => {
+                const Comp = asyncComps.tanstack!;
+                return (
+                  <Comp
+                    items={data}
+                    itemHeight={itemHeight}
+                    height={containerHeight}
+                    renderItem={(item: DataItem) => (
+                      <div style={styles.row}>
+                        <span>{item.name}</span>
+                        <span style={styles.roleText}>
+                          {item.role}
+                        </span>
+                      </div>
+                    )}
+                  />
+                );
+              })()
+            ) : null}
             <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
-              * 使用 @tanstack/react-virtual，无头方案，框架无关
+              * 使用 @tanstack/react-virtual,无头方案,框架无关
             </p>
           </div>
         )}
@@ -444,7 +465,7 @@ export default function VirtualListDemo() {
                   color: '#6b21a8',
                 }}
               >
-                0 个 DOM 节点（纯 Canvas 绘制）
+                0 个 DOM 节点(纯 Canvas 绘制)
               </span>
               <span
                 style={{
@@ -456,17 +477,28 @@ export default function VirtualListDemo() {
                 数据占用 {formatSize(dataSize)}
               </span>
             </div>
-            <CanvasVirtualList<DataItem>
-              items={data}
-              itemHeight={itemHeight}
-              height={containerHeight}
-              renderItem={(item) => ({
-                name: item.name,
-                role: item.role,
-              })}
-            />
+            {asyncLoading.canvas ? (
+              <div style={loaderBoxStyle}>加载 Canvas 渲染组件...</div>
+            ) : asyncError.canvas ? (
+              <div style={{ ...loaderBoxStyle, color: '#dc2626' }}>加载失败:{asyncError.canvas}</div>
+            ) : asyncComps.canvas ? (
+              (() => {
+                const Comp = asyncComps.canvas!;
+                return (
+                  <Comp
+                    items={data}
+                    itemHeight={itemHeight}
+                    height={containerHeight}
+                    renderItem={(item: DataItem) => ({
+                      name: item.name,
+                      role: item.role,
+                    })}
+                  />
+                );
+              })()
+            ) : null}
             <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
-              * Canvas 直接绘制像素，无 DOM 节点，百万级数据也能流畅滚动
+              * Canvas 直接绘制像素,无 DOM 节点,百万级数据也能流畅滚动
             </p>
           </div>
         )}

@@ -4,13 +4,10 @@ authors: [cbtpro]
 description: 用统一 Provider 管理偏好，区分跟随系统与显式主题，说明存储异常、SSR 和跨标签页同步。
 tags:
   - crud
-  - 主题切换
-  - 状态管理
   - 前端
   - react
   - antd
-  - 工程实践
-  - 鲁棒性
+  - 状态管理
 ---
 
 主题、组件尺寸和语言都是跨页面偏好。如果 Header 和设置页各自读 localStorage、各自维护 state，一边修改后另一边不会自动同步。

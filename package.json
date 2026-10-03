@@ -8,9 +8,13 @@
   },
   "scripts": {
     "docusaurus": "docusaurus",
+    "generate:crud-docs": "node scripts/generate-crud-beyond-docs.mjs",
+    "prestart": "npm run generate:crud-docs",
     "start": "docusaurus start",
+    "prebuild": "npm run generate:crud-docs",
     "build": "docusaurus build",
     "swizzle": "docusaurus swizzle",
+    "predeploy": "npm run generate:crud-docs",
     "deploy": "SITE_URL=https://cbtpro.github.io BASE_URL=/docs-use-docusaurus/ docusaurus deploy",
     "clear": "docusaurus clear",
     "serve": "docusaurus serve",

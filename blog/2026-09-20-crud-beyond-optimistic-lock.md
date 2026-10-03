@@ -4,11 +4,9 @@ authors: [cbtpro]
 description: 从丢失更新说明版本检查，区分库存命令与表单编辑，并明确 MyBatis-Plus 回写、事务重试和幂等的边界。
 tags:
   - crud
-  - 数据库
-  - 并发
-  - 乐观锁
-  - 工程实践
-  - 鲁棒性
+  - 后端
+  - spring
+  - 数据管理
 ---
 
 两次请求同时读到库存 10，各减 1，再分别把 9 写回数据库。两次更新都成功，库存却只少了 1。这就是丢失更新。
@@ -88,8 +86,10 @@ if (goodsMapper.updateById(goods) != 1) {
 
 单次扣库存可以在冲突后重试，但如果还要写订单，整个业务尝试必须在同一事务内完成。冲突要抛出异常，让本次尝试回滚；重试在事务结束之后进行，每轮重新读取。
 
-```java title="重试编排示意"
-// attemptService 是另一个 Spring Bean，确保经过事务代理。
+这里的关键是：**编排方法不能加 `@Transactional`**。一旦编排方法开启事务，整个循环都在同一个事务里，冲突后 `UPDATE` 返回 0 但事务不会自动回滚，下一轮循环继续执行会读到旧数据。把单次尝试拆到另一个 Spring Bean 的 `@Transactional` 方法里，编排方法保持无事务，每次调用都开启并结束一次独立事务。
+
+```java title="重试编排：外层无事务，内层独立事务"
+// 编排方法不加 @Transactional，否则整个循环在同一个事务里。
 public void placeOrder(OrderRequest request) {
     for (int attempt = 0; attempt < 3; attempt++) {
         try {
@@ -100,8 +100,10 @@ public void placeOrder(OrderRequest request) {
         }
     }
 }
+```
 
-// 以下方法位于 attemptService 对应的 Bean 中。
+```java title="单次尝试：独立事务，冲突即回滚"
+// attemptService 是另一个 Spring Bean，确保经过事务代理。
 @Transactional(rollbackFor = Exception.class)
 public void placeOnce(OrderRequest request) {
     Goods goods = goodsMapper.selectById(request.goodsId());

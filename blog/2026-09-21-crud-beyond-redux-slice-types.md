@@ -4,13 +4,10 @@ authors: [cbtpro]
 description: 从 store 推断 Redux 类型，明确 typed hooks 的作用，并区分账号替换与资料更新，避免角色残留。
 tags:
   - crud
-  - 状态管理
-  - 权限
   - 前端
   - react
-  - 工程实践
-  - 鲁棒性
-  - 软件设计
+  - 状态管理
+  - 架构
 ---
 
 权限按钮需要读取当前角色，用户菜单还会读取姓名和头像。项目已经使用 Redux Toolkit 时，可以把这些字段放在 user slice 中，并让组件只订阅需要的部分。

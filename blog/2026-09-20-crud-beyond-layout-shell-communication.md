@@ -4,13 +4,9 @@ authors: [cbtpro]
 description: 通过 Outlet context 注册页面操作，通过 route handle 提供标题和面包屑，明确 effect 依赖、清理与多页面边界。
 tags:
   - crud
-  - 路由
-  - 布局
   - 前端
   - react
-  - antd
-  - 工程实践
-  - 鲁棒性
+  - 状态管理
 ---
 
 列表页的“新建”、详情页的“编辑”和“返回列表”可以统一放到布局外壳的面包屑栏右侧。位置由 Layout 管理，按钮的行为仍由当前页面决定。

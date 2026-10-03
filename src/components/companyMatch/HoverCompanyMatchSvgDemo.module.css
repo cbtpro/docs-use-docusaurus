@@ -1,0 +1,159 @@
+.workspace {
+  --hover-match-accent: #0f766e;
+  position: relative;
+  min-height: 390px;
+  margin: 20px 0 28px;
+  overflow: hidden;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 14px;
+  background:
+    linear-gradient(var(--ifm-background-surface-color), var(--ifm-background-surface-color)) padding-box,
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 23px,
+      color-mix(in srgb, var(--ifm-color-emphasis-300) 38%, transparent) 24px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 23px,
+      color-mix(in srgb, var(--ifm-color-emphasis-300) 38%, transparent) 24px
+    );
+  isolation: isolate;
+}
+
+.workspaceTitle {
+  position: absolute;
+  z-index: 4;
+  top: 14px;
+  left: 16px;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.connectorLayer {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.connectorPath {
+  fill: none;
+  stroke: var(--hover-match-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 7 6;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  vector-effect: non-scaling-stroke;
+}
+
+.connectorPathVisible {
+  opacity: 0.9;
+  animation: hoverCompanyMatchMarchingAnts 700ms linear infinite;
+}
+
+@keyframes hoverCompanyMatchMarchingAnts {
+  to {
+    stroke-dashoffset: -13;
+  }
+}
+
+.arrowHead {
+  fill: var(--hover-match-accent);
+}
+
+.panel {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  width: min(220px, calc(100% - 16px));
+  overflow: hidden;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-top: 3px solid var(--hover-match-accent);
+  border-radius: 12px;
+  background: var(--ifm-background-surface-color);
+  box-shadow: 0 10px 28px rgb(15 23 42 / 12%);
+  will-change: transform;
+}
+
+.dragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 8px 10px;
+  color: var(--ifm-color-emphasis-800);
+  background: var(--ifm-color-emphasis-100);
+  cursor: grab;
+  font-size: 13px;
+  font-weight: 700;
+  touch-action: none;
+  user-select: none;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.dragHint {
+  color: var(--ifm-color-emphasis-600);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.panelBody {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.item {
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  font-size: 12px;
+  line-height: 1.4;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.activeItem {
+  border-color: var(--hover-match-accent);
+  background: color-mix(in srgb, var(--hover-match-accent) 10%, var(--ifm-background-color));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hover-match-accent) 18%, transparent);
+}
+
+.item strong,
+.item small {
+  display: block;
+}
+
+.item small {
+  margin-top: 2px;
+  color: var(--ifm-color-emphasis-600);
+}
+
+@media (max-width: 560px) {
+  .workspace {
+    min-height: 520px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connectorPathVisible {
+    animation: none;
+  }
+}

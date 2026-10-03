@@ -1,0 +1,722 @@
+---
+title: 用 React 实现批量企业查询与匹配
+authors: [cbtpro]
+description: 从稳定数据关联、结果去重到双列表联动、虚拟滚动和人工纠错，完整实现一个批量企业匹配前端。
+tags:
+  - react
+  - 前端
+  - 组件设计
+  - 数据管理
+---
+
+import {
+  MultipleCompanyMatchSvgDemo,
+  SingleCompanyMatchSvgDemo,
+} from '@site/src/components/companyMatch/CompanyMatchSvgDemo'
+import HoverCompanyMatchSvgDemo from '@site/src/components/companyMatch/HoverCompanyMatchSvgDemo'
+import VirtualCompanyMatchDemo from '@site/src/components/companyMatch/VirtualCompanyMatchDemo'
+
+批量查询企业，表面上只是把一组名称提交给接口，再展示返回结果。真正开始实现后，很快会遇到更具体的问题：简称如何命中工商全称，多条输入命中同一家企业时怎样去重，未匹配项如何人工修正，上万条数据怎样避免页面卡顿，左右列表又怎样保持高亮和滚动联动。
+
+这篇文章用 React 和 TypeScript 实现一个完整的前端流程。匹配规则可以放在本地、Web Worker 或服务端，但前端的数据结构和交互方式保持不变。
+
+{/* truncate */}
+
+## 先明确页面要完成什么
+
+用户粘贴一批企业名称或统一社会信用代码，点击“开始匹配”后，页面分成左右两列：
+
+- 左侧保留每条原始输入；
+- 右侧展示标准企业，重复命中的企业只出现一次；
+- 匹配成功项展示企业名称、地区、信用代码和匹配方式；
+- 未匹配项保留在结果中，允许人工选择企业；
+- 鼠标经过任意一侧时，高亮另一侧的关联项；
+- 数据量较大时，两侧都使用虚拟列表。
+
+例如下面三条输入：
+
+```text
+阿里巴巴（中国）有限公司
+阿里巴巴
+不存在企业
+```
+
+前两条可能命中同一家企业。左侧仍然显示三行，右侧则显示一条阿里巴巴标准企业和一条未匹配记录。这个“一对多”关系是后续去重、高亮、滚动和导出的基础。
+
+## 用稳定 ID 建立数据驱动的关联
+
+不要用企业名称或列表下标维持两侧关系。名称可能重复，列表也会因为筛选、排序和人工纠错而改变顺序。
+
+这里采用的是数据驱动思路：先用数据描述“哪些输入匹配了哪家企业”，界面再根据这份关系渲染列表、计算高亮、定位滚动目标和生成连线。事件只修改数据状态，不直接命令某个列表项变色，也不把两个 DOM 节点永久绑定在一起。
+
+### 数据驱动与事件驱动
+
+数据驱动符合 React 的声明式设计：开发者描述“当前数据应该渲染成什么界面”，状态变化后由 React 重新计算组件树并更新 DOM。页面的重点是状态和状态之间的派生关系，而不是按顺序下达一组界面操作命令。
+
+事件驱动则以“发生了什么”为中心。模块通过事件总线发布 `source-hovered`、`result-filtered` 或 `manual-match-completed` 等事件，订阅者收到事件后分别修改高亮、滚动列表、重画连线。发布者不必知道有哪些订阅者，适合跨模块通知，但页面最终状态分散在各个监听器中。
+
+| 对比项 | 数据驱动 | 事件驱动 |
+| --- | --- | --- |
+| 核心对象 | 当前状态以及由状态派生的数据 | 已经发生的事件和对应监听器 |
+| 页面更新 | 修改 state，React 根据数据重新渲染 | 发布事件，由订阅者执行页面更新 |
+| 关系表达 | `sourceId -> result` 等可查询的数据结构 | `source-hovered` 等消息约定 |
+| 状态位置 | 集中在组件、Hook 或状态容器中 | 可能分散在多个事件处理器中 |
+| 调试方式 | 查看某一时刻的 state 和派生结果 | 追踪事件顺序、订阅者和副作用 |
+| 适合场景 | 列表、筛选、选中、高亮等可由状态描述的 UI | 跨模块通知、埋点、外部消息和一次性副作用 |
+
+如果用事件总线实现左右联动，代码可能是这样：
+
+```ts title="事件总线式联动"
+eventBus.emit('company-match:source-hovered', { sourceId })
+
+eventBus.on('company-match:source-hovered', ({ sourceId }) => {
+  highlightSourceRow(sourceId)
+})
+
+eventBus.on('company-match:source-hovered', ({ sourceId }) => {
+  scrollResultIntoView(sourceId)
+})
+
+eventBus.on('company-match:source-hovered', ({ sourceId }) => {
+  redrawConnector(sourceId)
+})
+```
+
+这种实现能工作，但一次 hover 的最终效果由三个订阅者共同决定。筛选、虚拟列表换窗或人工纠错后，还要确保所有监听器使用的下标和 DOM 都已经更新。事件存在先后顺序时，结果还可能取决于哪个监听器先执行。
+
+React 数据驱动的写法只在事件入口更新状态：
+
+```tsx title="React 数据驱动式联动"
+const [activeSourceIds, setActiveSourceIds] = useState<string[]>([])
+
+const handleSourceMouseEnter = (sourceId: string) => {
+  setActiveSourceIds([sourceId])
+}
+
+const sourceActive = activeSourceIds.includes(source.sourceId)
+const resultActive = result.sourceIds.some((sourceId) =>
+  activeSourceIds.includes(sourceId),
+)
+```
+
+高亮样式由 `sourceActive` 和 `resultActive` 派生；滚动目标由 `sourceId -> resultIndex` 派生；SVG 端点则由稳定 ID 和当前已挂载的 DOM 派生。每个视图读取同一份状态，不需要通过事件总线互相通知。
+
+数据驱动并不意味着没有事件。点击、hover、滚动和接口响应仍然是事件，它们是状态变化的输入。区别在于：事件处理函数只提交状态变化，状态才是渲染页面的事实来源。事件总线仍可用于埋点或跨系统通知，但不承担保存当前选中项、高亮项和匹配关系的职责。
+
+给每条输入分配一个稳定的 `sourceId`，标准企业使用目录中的 `company.id`：
+
+```ts title="companyMatchTypes.ts"
+export interface Company {
+  id: string
+  name: string
+  aliases: string[]
+  creditCode: string
+  region: string
+}
+
+export type MatchKind = 'credit-code' | 'exact' | 'alias' | 'normalized' | 'manual' | 'none'
+
+export interface CompanyMatch {
+  sourceId: string
+  sourceName: string
+  company: Company | null
+  kind: MatchKind
+  strategyLabel: string
+  confidence: number
+}
+
+export interface DeduplicatedCompanyMatch extends CompanyMatch {
+  sourceIds: string[]
+  sourceNames: string[]
+  sourceCount: number
+}
+```
+
+逐条匹配结果是一条输入对应一条结果。右侧去重以后，一个企业可能对应多条输入，因此必须保留全部 `sourceIds`。如果去重时只留下第一条输入，反向高亮和人工核对都会丢失来源。
+
+`CompanyMatch[]` 是这项功能的事实来源，其他内容都由它派生：
+
+| 原始或状态数据 | 派生结果 | 用途 |
+| --- | --- | --- |
+| `CompanyMatch[]` | `DeduplicatedCompanyMatch[]` | 渲染去重后的右侧企业 |
+| `displayedResults` | `resultIndexBySourceId` | 从左侧来源定位右侧结果 |
+| `activeSourceIds` | 左右行的 `active` 状态 | 驱动双向高亮 |
+| 稳定 ID 与当前 DOM Map | SVG 路径 | 连接虚拟窗口中已渲染的行 |
+
+例如用户 hover 左侧行时，事件只把对应 `sourceId` 写入 `activeSourceIds`。左侧行根据“自己的 ID 是否在集合中”决定样式，右侧行根据“自己的 `sourceIds` 是否与集合相交”决定样式。滚动和连线也读取同一份关系，不再维护另一套容易失步的关联状态。
+
+这种写法还有一个直接好处：筛选、排序、去重或人工纠错改变数据后，React 会用新的派生结果重新渲染。代码不需要逐个寻找旧节点、修改 class，再尝试修正另一侧下标。DOM 只负责展示和位置测量，业务关系始终留在数据层。
+
+下面几种写法则破坏了数据驱动：
+
+- 用企业名称查询另一侧 DOM，名称变化或重复时会失效；
+- 把当前行号当作关联键，排序或筛选后会指向错误记录；
+- 同时保存“选中企业”“选中行号”“高亮节点”等可相互推导的状态，更新时容易漏掉其中一项；
+- 在事件中直接操作 `classList`，让页面样式脱离 React state。
+
+稳定 ID 的作用，就是让业务数据、React 状态和短暂存在的 DOM 之间有一个不会随视图变化的连接点。
+
+## 解析输入并执行匹配
+
+先把文本拆成稳定的输入记录。空行可以忽略，重复输入则保留，因为用户可能需要核对原始文件中的每一行：
+
+```ts title="parseCompanySources.ts"
+export interface CompanySource {
+  sourceId: string
+  sourceName: string
+}
+
+export function parseCompanySources(text: string): CompanySource[] {
+  return text
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((sourceName, index) => ({
+      sourceId: `source-${index}`,
+      sourceName,
+    }))
+}
+```
+
+演示项目可以在浏览器中实现一组有优先级的规则。实际业务中，更适合由服务端查询企业库，前端只消费统一的 `CompanyMatch[]`。
+
+名称归一化要克制。去掉空格、括号和常见公司后缀可以提高命中率，但规则过度宽松会把不同企业合并在一起：
+
+```ts title="normalizeCompanyName.ts"
+const COMPANY_SUFFIXES = [
+  '有限责任公司',
+  '股份有限公司',
+  '有限公司',
+  '集团公司',
+  '集团',
+  '公司',
+]
+
+export function normalizeCompanyName(value: string): string {
+  let result = value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s（）()·・]/g, '')
+
+  for (const suffix of COMPANY_SUFFIXES) {
+    if (result.endsWith(suffix)) {
+      result = result.slice(0, -suffix.length)
+      break
+    }
+  }
+
+  return result
+}
+```
+
+匹配器按“信用代码、全称、别名、归一化名称”的顺序执行。越可靠的规则越靠前：
+
+```ts title="matchCompany.ts"
+function normalizeCreditCode(value: string): string {
+  return value.replace(/[\s-]/g, '').toUpperCase()
+}
+
+function isCreditCode(value: string): boolean {
+  return /^[0-9A-HJ-NPQRTUWXY]{18}$/.test(value)
+}
+
+export function matchCompany(
+  source: CompanySource,
+  companies: Company[],
+): CompanyMatch {
+  const input = source.sourceName
+  const creditCode = normalizeCreditCode(input)
+
+  if (isCreditCode(creditCode)) {
+    const company = companies.find(
+      (item) => normalizeCreditCode(item.creditCode) === creditCode,
+    )
+    if (company) {
+      return createMatch(source, company, 'credit-code', '信用代码', 1)
+    }
+  }
+
+  const exact = companies.find((item) => item.name === input)
+  if (exact) return createMatch(source, exact, 'exact', '企业全称', 1)
+
+  const alias = companies.find((item) => item.aliases.includes(input))
+  if (alias) return createMatch(source, alias, 'alias', '企业简称', 0.95)
+
+  const normalizedInput = normalizeCompanyName(input)
+  const normalized = companies.find(
+    (item) => normalizeCompanyName(item.name) === normalizedInput,
+  )
+  if (normalized) {
+    return createMatch(source, normalized, 'normalized', '名称归一化', 0.85)
+  }
+
+  return {
+    ...source,
+    company: null,
+    kind: 'none',
+    strategyLabel: '未匹配',
+    confidence: 0,
+  }
+}
+
+function createMatch(
+  source: CompanySource,
+  company: Company,
+  kind: MatchKind,
+  strategyLabel: string,
+  confidence: number,
+): CompanyMatch {
+  return { ...source, company, kind, strategyLabel, confidence }
+}
+```
+
+本地目录很大时，不要让每条输入都遍历全部企业。预先建立 `Map` 索引，查询可从线性扫描变成按键读取。计算仍然较重时，再把匹配移到 Web Worker，避免阻塞输入和滚动。
+
+## 去重时保留全部来源
+
+右侧结果按 `company.id` 聚合。未匹配项没有企业 ID，每条都应单独保留，因此使用自己的 `sourceId` 作为键：
+
+```ts title="deduplicateMatches.ts"
+export function getResultKey(match: CompanyMatch): string {
+  return match.company?.id ?? match.sourceId
+}
+
+export function deduplicateMatches(
+  matches: CompanyMatch[],
+): DeduplicatedCompanyMatch[] {
+  const resultByKey = new Map<string, DeduplicatedCompanyMatch>()
+
+  for (const match of matches) {
+    const key = getResultKey(match)
+    const current = resultByKey.get(key)
+
+    if (current) {
+      current.sourceIds.push(match.sourceId)
+      current.sourceNames.push(match.sourceName)
+      current.sourceCount += 1
+      continue
+    }
+
+    resultByKey.set(key, {
+      ...match,
+      sourceIds: [match.sourceId],
+      sourceNames: [match.sourceName],
+      sourceCount: 1,
+    })
+  }
+
+  return [...resultByKey.values()]
+}
+```
+
+这一步还解决了导出问题。用户可以导出去重后的企业名单，也可以通过 `sourceNames` 追溯每家企业由哪些输入命中。
+
+## 把页面数据收进模型 Hook
+
+输入、匹配结果、筛选条件和人工修正属于页面数据模型。它们不应该和 DOM 测量、滚动位置混在一起：
+
+```tsx title="useCompanyMatchModel.ts"
+export function useCompanyMatchModel(companies: Company[]) {
+  const [sourceText, setSourceText] = useState('')
+  const [matches, setMatches] = useState<CompanyMatch[]>([])
+  const [hideUnmatched, setHideUnmatched] = useState(false)
+
+  const sources = useMemo(
+    () => parseCompanySources(sourceText),
+    [sourceText],
+  )
+
+  const displayedResults = useMemo(() => {
+    const results = deduplicateMatches(matches)
+    return hideUnmatched
+      ? results.filter((item) => item.company !== null)
+      : results
+  }, [hideUnmatched, matches])
+
+  const resultIndexBySourceId = useMemo(() => {
+    const index = new Map<string, number>()
+    displayedResults.forEach((result, resultIndex) => {
+      result.sourceIds.forEach((sourceId) => {
+        index.set(sourceId, resultIndex)
+      })
+    })
+    return index
+  }, [displayedResults])
+
+  const runMatch = () => {
+    setMatches(sources.map((source) => matchCompany(source, companies)))
+  }
+
+  const applyManualMatch = (sourceId: string, company: Company) => {
+    setMatches((current) => current.map((item) =>
+      item.sourceId === sourceId
+        ? {
+            ...item,
+            company,
+            kind: 'manual',
+            strategyLabel: '人工确认',
+            confidence: 1,
+          }
+        : item,
+    ))
+  }
+
+  return {
+    sourceText,
+    setSourceText,
+    sources,
+    matches,
+    displayedResults,
+    resultIndexBySourceId,
+    hideUnmatched,
+    setHideUnmatched,
+    runMatch,
+    applyManualMatch,
+  }
+}
+```
+
+筛选和排序必须先得到 `displayedResults`，再据此生成 `resultIndexBySourceId`。如果页面显示的是筛选后的数组，滚动索引却来自原数组，联动会跳到错误位置。
+
+## 让数据关系驱动高亮
+
+高亮不需要保存左侧行号、右侧行号或 DOM 节点，只需保存当前激活的来源 ID：
+
+```tsx
+const [activeSourceIds, setActiveSourceIds] = useState<string[]>([])
+
+const isSourceActive = (sourceId: string) =>
+  activeSourceIds.includes(sourceId)
+
+const isResultActive = (result: DeduplicatedCompanyMatch) =>
+  result.sourceIds.some((sourceId) => activeSourceIds.includes(sourceId))
+```
+
+左侧行进入 hover 时激活一条来源：
+
+```tsx
+onMouseEnter={() => setActiveSourceIds([source.sourceId])}
+```
+
+右侧企业进入 hover 时激活它的全部来源：
+
+```tsx
+onMouseEnter={() => setActiveSourceIds(result.sourceIds)}
+```
+
+这样即使一个企业对应多条输入，左右方向都能正确高亮。样式只改变背景、边框和阴影，不要改变行高或宽度，否则 hover 会引发布局抖动，SVG 端点也会反复变化。
+
+## 虚拟列表要按业务记录联动
+
+一万条数据不应该创建一万个列表节点。虚拟列表只渲染视口附近的行，并向外暴露有限的定位能力：
+
+```ts
+export interface VirtualListHandle {
+  scrollToIndex: (index: number) => number | null
+  scrollToOffset: (offset: number) => number | null
+}
+```
+
+当鼠标进入左侧来源时，先用业务映射找到右侧下标，再让右侧虚拟列表滚动：
+
+```tsx
+const handleSourceMouseEnter = (sourceId: string) => {
+  setActiveSourceIds([sourceId])
+
+  const resultIndex = resultIndexBySourceId.get(sourceId)
+  if (resultIndex !== undefined) {
+    resultListRef.current?.scrollToIndex(resultIndex)
+  }
+}
+```
+
+不要直接把左侧的 `scrollTop` 赋给右侧。两侧行数不同，去重、筛选和排序也会改变数据分布，相同像素通常不代表相同企业。
+
+右侧企业可能关联多条左侧输入。反向定位时，应选择距离当前左侧视口最近的来源，避免页面突然跳到很远的位置；高亮状态仍保留全部 `sourceIds`。
+
+程序化滚动还会触发另一侧的 `scroll` 事件。实现双向联动时，需要记录本次滚动的目标偏移；事件到达目标值后清除标记，不再反向同步，否则两个列表会相互触发并抖动。
+
+### 定位尚未渲染的记录
+
+虚拟列表中的绝大多数记录并没有对应的 DOM 节点，因此不能先用 `querySelector()` 或 ref Map 查节点再滚动。下面的独立示例有 1,000 条来源和 500 条去重结果，但两侧各自只挂载视口附近的十几行。`source-780` 初始不在 DOM 中，点击正向定位按钮后仍然可以准确定位到它和关联企业。输入 `company-390` 或直接点击右侧已经渲染的行，则可以反向定位左侧来源。
+
+<VirtualCompanyMatchDemo />
+
+定位过程分成两个阶段：先在完整数据中查索引并滚动，再等虚拟窗口提交新的 DOM 后取节点。
+
+```tsx title="先定位数据，再读取挂载后的节点"
+const sourceIndex = sourceIndexById.get(sourceId)
+const resultIndex = resultIndexBySourceId.get(sourceId)
+
+pendingTargetRef.current = { sourceId, resultId }
+sourceListRef.current?.scrollToIndex(sourceIndex)
+resultListRef.current?.scrollToIndex(resultIndex)
+
+// VirtualList 在新窗口完成挂载后调用 onItemsRendered
+function onItemsRendered() {
+  const pending = pendingTargetRef.current
+  if (!pending) return
+
+  const sourceElement = sourceItemRefs.current.get(pending.sourceId)
+  const resultElement = resultItemRefs.current.get(pending.resultId)
+  if (!sourceElement || !resultElement) return
+
+  pendingTargetRef.current = null
+  sourceElement.focus({ preventScroll: true })
+}
+```
+
+`scrollToIndex()` 接收的是数据索引，不是 DOM 下标。固定行高时可直接计算目标偏移；动态行高则应使用虚拟列表库提供的测量与定位接口。`onItemsRendered` 应在行 ref 已经登记以后触发，例如放在虚拟列表内部的 `useLayoutEffect` 中。这样即使 React 的渲染没有在下一个动画帧完成，也不会依赖一次 `requestAnimationFrame()` 碰运气。
+
+这里的 ref Map 只保存当前窗口中真实存在的节点。记录滚出视口、组件卸载时必须从 Map 删除，否则后续会读到已经脱离文档的旧节点。业务查找始终使用 `sourceIndexById` 和 `resultIndexBySourceId`；DOM 只在聚焦、测量 SVG 端点等确实需要浏览器节点的最后一步使用。
+
+### 从结果反向定位来源
+
+反向定位需要再建立一份 `resultIndexById`，但不需要维护额外的 DOM 关系。先根据结果 ID 取得聚合结果，再从它的 `sourceIds` 找到左侧数据索引：
+
+```tsx title="结果反向定位到最近的来源"
+const resultIndex = resultIndexById.get(resultId)
+const result = displayedResults[resultIndex]
+const currentCenter = sourceListRef.current?.getVisibleCenterIndex() ?? 0
+
+const targetSourceId = result.sourceIds.reduce((nearestId, candidateId) => {
+  const nearestIndex = sourceIndexById.get(nearestId)
+  const candidateIndex = sourceIndexById.get(candidateId)
+
+  return Math.abs(candidateIndex - currentCenter)
+    < Math.abs(nearestIndex - currentCenter)
+    ? candidateId
+    : nearestId
+})
+
+setActiveSourceIds(result.sourceIds)
+resultListRef.current?.scrollToIndex(resultIndex)
+sourceListRef.current?.scrollToIndex(sourceIndexById.get(targetSourceId))
+```
+
+一个去重结果可能对应多条来源。示例会高亮它关联的全部来源，但只选择距离左侧当前视口中心最近的一条作为滚动目标。这样用户在核对列表中部或末尾数据时，反向联动不会总是跳到该企业的第一条来源。滚动完成后仍通过同一个 `pendingTargetRef` 和 `onItemsRendered` 确认目标节点已经挂载，再执行聚焦或 SVG 测量。
+
+## 用 SVG 连接当前已经渲染的行
+
+下面的示例把原始输入和匹配结果做成两个可拖动面板。拖动任意面板时，SVG 会重新读取列表项位置，并让曲线自动选择两个元素相对的边缘作为端点。
+
+### 单实例
+
+<SingleCompanyMatchSvgDemo />
+
+单实例的工作区持有自己的面板位置、列表项 DOM Map 和 SVG path ref。拖拽只更新面板的 `transform`，连线层覆盖整个工作区并设置 `pointer-events: none`，不会挡住鼠标或触摸操作。
+
+### 多实例
+
+<MultipleCompanyMatchSvgDemo />
+
+多实例不能使用 `document.querySelector()` 查找端点，也不能把所有节点放进一个模块级 Map。示例 A 和示例 B 各自从组件根节点开始管理 ref、`ResizeObserver` 和动画帧任务；每个 SVG 的箭头 marker 也通过 `useId()` 生成独立 ID。因此拖动一个实例时，不会误用另一个实例中名称相同的 `sourceId`。
+
+### Hover 联动与蚂蚁线
+
+下面的示例仍然可以拖动左右面板，但默认隐藏 SVG 路径。把鼠标移到任意一条原始输入或匹配结果上，另一侧关联项会同步高亮，相关连线同时显示为流动的蚂蚁线。
+
+<HoverCompanyMatchSvgDemo />
+
+左侧 hover 时，状态只保存当前来源 ID；右侧 hover 时，把该企业关联的全部 `sourceIds` 写入同一状态。两侧高亮和 SVG 可见性都从 `activeSourceIds` 派生：
+
+```tsx title="同一份状态驱动高亮和连线"
+const [activeSourceIds, setActiveSourceIds] = useState<string[]>([])
+
+const sourceActive = activeSourceIds.includes(sourceId)
+const resultActive = result.sourceIds.some((id) =>
+  activeSourceIds.includes(id),
+)
+const connectorVisible = activeSourceIds.includes(connector.sourceId)
+```
+
+SVG 图层始终存在，路径也提前完成测量，只用 `opacity` 控制显隐。这样 hover 时不需要临时创建 SVG、重新登记 DOM 或等待下一次布局；蚂蚁线只改变 `stroke-dashoffset`，不会引发布局和重新测量：
+
+```css title="蚂蚁线动画"
+.connector-path {
+  opacity: 0;
+  stroke-dasharray: 7 6;
+}
+
+.connector-path-visible {
+  opacity: 0.9;
+  animation: marching-ants 700ms linear infinite;
+}
+
+@keyframes marching-ants {
+  to { stroke-dashoffset: -13; }
+}
+```
+
+### 按帧合并拖拽和测量
+
+`pointermove` 的触发频率可能高于屏幕刷新率。每次事件都执行 `setState`、`getBoundingClientRect()` 和 SVG 更新，会在一帧内重复计算。示例只记录最新指针坐标，再用 `requestAnimationFrame` 合并同一帧内的事件：
+
+```ts title="拖拽更新按动画帧合并"
+let dragFrame: number | null = null
+let latestPointer: { x: number; y: number } | null = null
+
+function handlePointerMove(event: PointerEvent) {
+  latestPointer = { x: event.clientX, y: event.clientY }
+  if (dragFrame !== null) return
+
+  dragFrame = requestAnimationFrame(() => {
+    dragFrame = null
+    if (!latestPointer) return
+    setPanelPosition(calculatePosition(latestPointer))
+  })
+}
+```
+
+面板位置通过 `translate3d()` 更新，避免修改 `top`、`left` 后让工作区重新布局。React 提交新位置后再统一测量端点；路径直接写入已有 `<path>` 的 `d` 属性，不把每一帧的几何坐标放进 React state，从而避免为了移动线条再次渲染全部列表项。
+
+连线依赖 DOM 的真实位置，而虚拟列表中的行会不断挂载和卸载。用两个 `Map` 保存当前窗口中的节点：
+
+```tsx
+const sourceItemRefs = useRef(new Map<string, HTMLDivElement>())
+const resultItemRefs = useRef(new Map<string, HTMLDivElement>())
+
+function registerSourceItem(sourceId: string, element: HTMLDivElement | null) {
+  if (element) sourceItemRefs.current.set(sourceId, element)
+  else sourceItemRefs.current.delete(sourceId)
+}
+
+function registerResultItem(resultKey: string, element: HTMLDivElement | null) {
+  if (element) resultItemRefs.current.set(resultKey, element)
+  else resultItemRefs.current.delete(resultKey)
+}
+```
+
+测量时，把左右元素相对于视口的坐标转换成工作区内部坐标：
+
+```ts
+function createConnectorPath(
+  sourceElement: HTMLElement,
+  resultElement: HTMLElement,
+  workspaceElement: HTMLElement,
+) {
+  const sourceRect = sourceElement.getBoundingClientRect()
+  const resultRect = resultElement.getBoundingClientRect()
+  const workspaceRect = workspaceElement.getBoundingClientRect()
+
+  const sourceCenterX = sourceRect.left + sourceRect.width / 2
+  const resultCenterX = resultRect.left + resultRect.width / 2
+  const sourceIsLeft = sourceCenterX <= resultCenterX
+  const x1 = (sourceIsLeft ? sourceRect.right : sourceRect.left)
+    - workspaceRect.left
+  const y1 = sourceRect.top + sourceRect.height / 2 - workspaceRect.top
+  const x2 = (sourceIsLeft ? resultRect.left : resultRect.right)
+    - workspaceRect.left
+  const y2 = resultRect.top + resultRect.height / 2 - workspaceRect.top
+  const curve = Math.max(36, Math.abs(x2 - x1) * 0.5)
+  const direction = sourceIsLeft ? 1 : -1
+
+  return `M ${x1} ${y1} C ${x1 + curve * direction} ${y1}, ${x2 - curve * direction} ${y2}, ${x2} ${y2}`
+}
+```
+
+SVG 作为左右列表上方的独立图层，只接收已经算好的路径：
+
+```tsx
+<svg className="connector-layer" aria-hidden="true">
+  {paths.map((path) => (
+    <path key={path.sourceId} d={path.d} className="connector-path" />
+  ))}
+</svg>
+```
+
+```css
+.connector-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.connector-path {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
+}
+```
+
+尺寸变化不需要轮询。对工作区、左右面板和当前已挂载行注册同一个 `ResizeObserver`，在回调中安排一次动画帧测量：
+
+```ts title="尺寸变化后自动重算"
+function scheduleConnectorMeasure() {
+  if (measureFrame !== null) return
+  measureFrame = requestAnimationFrame(() => {
+    measureFrame = null
+    measureConnectors()
+  })
+}
+
+const observer = new ResizeObserver(scheduleConnectorMeasure)
+observer.observe(workspaceElement)
+observer.observe(sourcePanelElement)
+observer.observe(resultPanelElement)
+```
+
+只有两端节点都存在时才绘制。滚动开始后立即隐藏连线，虚拟窗口稳定后再测量；窗口缩放、面板内容换行或字体加载导致尺寸变化时，`ResizeObserver` 会自动安排更新。组件卸载时要断开 observer，并取消尚未执行的动画帧。不要缓存旧 DOM 的坐标，因为对应节点可能已经被虚拟列表卸载。
+
+## 未匹配项要进入人工纠错流程
+
+未匹配不是异常，而是一种需要处理的结果状态。右侧可以把它置顶并标红，点击“选择企业”后打开候选面板，按名称、简称和地区搜索。
+
+用户确认候选企业后，只替换对应 `sourceId` 的匹配结果。`matches` 更新会自然触发重新去重、筛选和索引构建，不需要手动修改右侧列表。
+
+最终输出通常分为两组：
+
+- 去重后的已匹配企业，用于后续业务处理或导出；
+- 未匹配输入及原因，用于补录和复核。
+
+输出面板本身也可能包含大量数据，同样要使用虚拟列表或表格的虚拟滚动能力，不能只优化主工作区。
+
+## 按变化原因拆分组件
+
+一个可维护的实现可以拆成以下几层：
+
+| 模块 | 职责 |
+| --- | --- |
+| `companyMatchTypes.ts` | 定义输入、企业、逐条结果和聚合结果 |
+| `matchCompany.ts` | 执行匹配策略，或适配服务端响应 |
+| `deduplicateMatches.ts` | 按企业 ID 聚合并保留来源 |
+| `useCompanyMatchModel.ts` | 管理输入、匹配、筛选、排序和人工纠错 |
+| `useCompanyMatchInteractions.ts` | 管理 hover、DOM 登记、双向滚动和 SVG 测量 |
+| `VirtualList.tsx` | 计算虚拟窗口并提供定位方法 |
+| `CompanySourcePanel.tsx` | 展示原始输入 |
+| `CompanyResultPanel.tsx` | 展示标准企业和人工纠错入口 |
+| `ConnectorSvgLayer.tsx` | 只负责渲染路径 |
+
+数据模型不读取 DOM，虚拟列表不了解企业字段，SVG 图层不判断业务关系。数据变化负责驱动视图变化，DOM ref 只在滚动定位和坐标测量时提供必要的浏览器能力。新增匹配策略时主要改模型层，调整联动时改交互层，修改视觉样式时改展示组件。
+
+## 验证容易出错的场景
+
+除了正常的全称匹配，还要覆盖下面这些情况：
+
+- 完整信用代码可以命中，非法字符和错误长度不会误匹配；
+- 全称和简称命中同一家企业时，右侧只保留一条且来源数正确；
+- 筛选未匹配项后，滚动索引仍与页面顺序一致；
+- 人工确认后，企业重新去重，旧的滚动目标不会继续生效；
+- 滚动过程中连线隐藏，窗口稳定后按新 DOM 位置恢复；
+- 右侧一条企业关联多个来源时，反向定位选择当前视口附近的来源；
+- 载入 1,000 条和 10,000 条数据时，实际 DOM 行数只与视口大小有关；
+- 同一页面挂载多个匹配组件时，DOM 查询和 hover 恢复不会跨实例。
+
+组件测试应从输入、点击、hover、滚动和人工选择等用户行为入口执行。匹配策略和归一化函数则适合单独做纯函数测试。
+
+## 小结
+
+批量企业匹配前端的核心不是把两个列表画出来，而是让每一步都围绕稳定的业务标识工作：
+
+1. 以匹配数据作为事实来源，用 `sourceId` 和 `company.id` 驱动界面关联；
+2. 去重结果保留全部 `sourceIds`，来源始终可追溯；
+3. 两侧按业务记录联动，不按 DOM 顺序或滚动像素猜测关系；
+4. SVG 只连接当前已挂载的节点，滚动后重新测量；
+5. 自动匹配和人工纠错都更新同一份模型数据。
+
+只要这个数据契约保持稳定，匹配计算放在浏览器、Web Worker 还是服务端，都不会影响双列表、高亮、连线和虚拟滚动的实现。
+
+本文根据 [《用 React 实现批量公司匹配：高亮、连线与虚拟列表联动》](https://github.com/cbtpro/action-in-reactjs/blob/main/docs/building-a-batch-company-matcher-with-react.md) 提炼改写。

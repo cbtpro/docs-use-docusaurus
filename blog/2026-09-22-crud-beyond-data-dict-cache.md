@@ -4,14 +4,9 @@ authors: [cbtpro]
 description: 按类型缓存字典快照，区分空结果与未命中，说明本地缓存、Redis 和提交后失效的边界。
 tags:
   - crud
-  - 数据字典
-  - 缓存
-  - spring
-  - java
   - 后端
-  - bean
-  - 工程实践
-  - 鲁棒性
+  - spring
+  - 数据管理
 ---
 
 列表里多个字段都要把 code 转成名称。如果逐行调用翻译接口，一页 50 行、每行 5 个字典字段，就可能产生 250 次查询。按类型批量加载后，同一页的字段可以共用一份字典快照。
@@ -129,11 +124,67 @@ Redis 可以用一个字符串键保存整个 type 的 JSON 快照，`SET key pa
 
 字典更新按顺序提交数据库事务、删除对应 L2、通知各实例删除 L1。订阅者负责清理本地层，消息由更新入口统一发布。
 
-Spring 的普通应用事件只在当前进程内传播。可以用 `@TransactionalEventListener(phase = AFTER_COMMIT)` 安排提交后处理，再通过 Redis Pub/Sub 或消息系统通知其他实例。进程在提交后、发消息前退出仍会丢失通知，需要可靠投递时应使用 outbox 等方案。见 [Spring 事务事件文档](https://docs.spring.io/spring-framework/reference/data-access/transaction/event.html)。
+```java title="DictChangeEvent.java"
+public record DictChangeEvent(String type) {}
+```
+
+```java title="DictUpdateService.java"
+@Service
+public class DictUpdateService {
+
+    private final DictMapper dictMapper;
+    private final ApplicationEventPublisher events;
+
+    @Transactional(rollbackFor = Exception.class)
+    public void updateDict(String type, List<DictItem> items) {
+        dictMapper.deleteByType(type);
+        dictMapper.insertBatch(type, items);
+        // 事务提交后才会发布事件，避免回滚时误删缓存。
+        events.publishEvent(new DictChangeEvent(type));
+    }
+}
+```
+
+```java title="DictCacheEvictListener.java"
+@Component
+public class DictCacheEvictListener {
+
+    private final RedisTemplate<String, String> redis;
+    private final DictLocalCache localCache;
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onDictChange(DictChangeEvent event) {
+        // 删除 L2 Redis 快照。
+        redis.delete("dict:" + event.type());
+        // 通知其他实例删除 L1 本地缓存。
+        redis.convertAndSend("dict:evict", event.type());
+    }
+}
+```
+
+Spring 的普通应用事件只在当前进程内传播。`@TransactionalEventListener(phase = AFTER_COMMIT)` 确保数据库提交成功后才执行缓存失效，避免事务回滚时误删缓存。再通过 Redis Pub/Sub 通知其他实例删除各自的 L1。
+
+进程在提交后、发消息前退出仍会丢失通知，需要可靠投递时应使用 outbox 等方案。见 [Spring 事务事件文档](https://docs.spring.io/spring-framework/reference/data-access/transaction/event.html)。
 
 Pub/Sub 和普通 Redisson RTopic 适合在线实例的即时通知；离线期间的失效通知通过持久消息补偿，或由过期刷新收敛。TTL 和定时刷新可以缩短遗漏通知造成的陈旧时间，形成最终一致的刷新路径。
 
 还有一个读写竞态：读者先读出旧数据库值，写者提交并删除缓存，读者随后又把旧值写回缓存。允许短暂陈旧的字典依靠 TTL 收敛；严格一致的场景通过版本化快照和有条件发布，或统一的读写协调协议处理回填顺序。
+
+```java title="版本化快照"
+public record DictSnapshot(long version, List<DictItem> items, Instant loadedAt) {}
+
+// 读取时比较版本，旧版本不覆盖新版本。
+public DictSnapshot getSnapshot(String type) {
+    DictSnapshot cached = localCache.get(type);
+    if (cached != null) {
+        return cached;
+    }
+    DictSnapshot fresh = loadFromDatabase(type);
+    // 只有本地无缓存或本地版本更旧时才写入。
+    localCache.compareAndSet(type, null, fresh);
+    return fresh;
+}
+```
 
 ## 预热与刷新
 

@@ -1,0 +1,222 @@
+---
+title: CRUD 之外 - 防抖与节流的边界与误用
+authors: [cbtpro]
+description: 区分静默触发与间隔触发，说明拖拽、滚动、搜索框、按钮连点的选型判据，并给出 delay 与 interval 的取值范围与误用后果。
+tags:
+  - crud
+  - 防抖
+  - 节流
+  - 前端
+  - react
+  - 性能优化
+  - 用户体验
+  - 工程实践
+  - 鲁棒性
+---
+
+import DragCompareDemo from '@site/src/components/debounceThrottle/DragCompareDemo'
+import SearchCompareDemo from '@site/src/components/debounceThrottle/SearchCompareDemo'
+import SubmitButtonDemo from '@site/src/components/debounceThrottle/SubmitButtonDemo'
+import RemoteSelectDemo from '@site/src/components/debounceThrottle/RemoteSelectDemo'
+import ThrottleIntervalDemo from '@site/src/components/debounceThrottle/ThrottleIntervalDemo'
+
+用户输入框敲一个字查一次、拖拽时鼠标移动发了几百次事件、按钮被连点提交了两次订单。前端遇到这类高频事件，第一反应是"加个防抖"。但搜索框、拖拽、窗口调整、按钮连点这几个场景对"减少触发"的要求不一样。把防抖当银弹，要么首屏不动，要么用户停下来还在等。
+
+防抖(debounce)和节流(throttle)表面都是"少触发几次"，实际触发策略完全不同。选错不是"少触发一点"的差别，是体验从流畅变卡顿的差别。
+
+{/* truncate */}
+
+## 两种触发策略的本质差异
+
+防抖的语义是"静默一段时间后才执行"。每次事件进来都重置计时器，只有用户停下来超过阈值，最后一次输入才被处理。中间所有事件丢弃。
+
+节流的语义是"按固定间隔执行一次"。间隔内的事件合并，间隔到了就触发，触发后继续计时。第一次通常立即响应，保证末次响应是为了不丢最后一次输入。
+
+```ts title="两种调度器"
+// 防抖:静默 wait 毫秒后执行,期间重置计时器,中间事件全部丢弃。
+function debounce<F extends (...args: any[]) => void>(fn: F, wait: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  return (...args: Parameters<F>) => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = null
+      fn(...args)
+    }, wait)
+  }
+}
+
+// 节流:首次立即执行,之后按 interval 间隔触发,末次响应保证最后一次输入被处理。
+function throttle<F extends (...args: any[]) => void>(fn: F, interval: number) {
+  let last = 0
+  let timer: ReturnType<typeof setTimeout> | null = null
+  return (...args: Parameters<F>) => {
+    const now = Date.now()
+    const remaining = interval - (now - last)
+    if (remaining <= 0) {
+      // 间隔已过,立即执行。
+      if (timer) { clearTimeout(timer); timer = null }
+      last = now
+      fn(...args)
+    } else if (!timer) {
+      // 间隔未到,安排末次响应,避免最后一次拖动被丢。
+      timer = setTimeout(() => {
+        last = Date.now()
+        timer = null
+        fn(...args)
+      }, remaining)
+    }
+  }
+}
+```
+
+末次响应是节流最容易踩的坑。少了这段，用户拖到一半停下来，最后一次 mousemove 可能正好落在间隔窗口里被合并掉，元素停在"差一帧"的位置。节流不只是"少触发"，还要保证末次响应。
+
+## 误用导致体验下降
+
+把防抖用在拖拽：用户每次 mousemove 都重置计时器，200ms 内一直拖拽，就一直不响应。屏幕上看不到元素跟着鼠标走，停下来才"跳"到位置。拖拽是连续事件，中间态有意义，防抖丢掉了中间态。
+
+<DragCompareDemo />
+
+把节流用在搜索框：用户敲完字停下来等结果，节流的间隔触发让用户停下来后还要等下一个 interval。300ms interval 下，最后一字敲完可能还要等近 300ms 才查询，停下来后那段等待时间特别明显。搜索的中间态无意义，用户输入"北"时不希望立刻查"北"，因为"北"只是"北京"的中间态。
+
+<SearchCompareDemo />
+
+把防抖用在窗口 resize：用户拖窗口边框，每帧都重置计时器，过程中布局不响应，松开后才一次性重排，中间看到的是"边框动了内容没动"。resize 也是连续事件，想要调整中持续响应就要用节流；只有想"调整完再响应一次"时才用防抖。
+
+把节流用在订单提交按钮：节流的间隔触发可能让多次点击"挤进去"一次，实际发出两次提交。提交类按钮要的是"用户连续点都重置，只发一次"，防抖更合适。按钮防连点的本质是合并，不是限频。
+
+<SubmitButtonDemo />
+
+## 防抖适用的判据
+
+判据一句话：中间态没有意义，只关心最后一次。具体场景：
+
+搜索框输入，用户输入"北""北京""北京市"，前两次输入不应该查，只有停下来那一次有意义。表单字段联动，用户填了一半的字段不应触发联动校验。自动保存草稿，用户停下来才保存，不在打字过程中持续保存。
+
+按钮防连点也偏向防抖，提交类按钮的语义是"用户停止点击了"，不是"限制每秒点击次数"。
+
+## 节流适用的判据
+
+判据一句话：连续事件，中间态有意义，首尾都要响应。具体场景：
+
+拖拽位置同步，元素要跟着鼠标动，停下来时位置必须精确。滚动加载，滚到一半就要触发预加载判断，不能等停下来才查边界。窗口 resize，调整中布局持续响应，松手前几次合并。鼠标跟随，鼠标移动时浮层跟着走，停下时落到最终位置。
+
+## 下拉框远程搜索用防抖
+
+下拉框远程搜索是高频误用场景。用户在 Select 里输入关键字，过滤服务端选项。这个场景必须用防抖，不用节流。
+
+中间态无意义：用户输入"北"时不希望立刻查"北"，因为"北"是"北京"的中间态。节流的间隔触发会让用户在输入中触发请求，输入过程中发了几个无意义的查询，停下来后还要等下一个 interval 才查最后一次输入。
+
+delay 取 300ms。50-100ms 失去防抖意义，输入中就发请求；800ms 以上用户停下来后等太久，延迟感明显。300ms 是平衡点，用户停下来 300ms 内基本无感，又能合并连续输入。
+
+300ms 不是银弹。慢网或高延迟场景可以加到 500ms，请求本身就要等，多等一点用户察觉不到；内网或快接口可以减到 200ms，体验更跟手。中文输入还要配合输入法合成事件处理，300ms 给选字留出时间，200ms 容易打断拼音。详见[输入法篇](./2026-09-20-crud-beyond-ime-composition.md)。
+
+<RemoteSelectDemo />
+
+```tsx title="远程搜索 Select 片段"
+const [options, setOptions] = useState<Option[]>([])
+const [loading, setLoading] = useState(false)
+const requestIdRef = useRef(0)
+
+const handleSearch = useCallback((keyword: string) => {
+  // 防抖 300ms,合并连续输入,停下来后一次性查询。
+  requestIdRef.current += 1
+  const current = requestIdRef.current
+  setLoading(true)
+  fetchOptions(keyword).then(result => {
+    // 丢弃旧请求的响应,只展示最新一次的结果。
+    if (current !== requestIdRef.current) return
+    setOptions(result)
+  }).finally(() => {
+    if (current === requestIdRef.current) setLoading(false)
+  })
+}, [])
+
+<Select
+  showSearch
+  filterOption={false}
+  loading={loading}
+  onSearch={useDebouncedCallback(handleSearch, 300)}
+  options={options}
+/>
+```
+
+`requestIdRef` 是竞态保护。防抖只能取消还没发的请求，已经发出的 fetch 不能反悔，浏览器侧的 AbortController 也只中断响应处理，服务端请求继续。请求序号比对确保旧响应不会覆盖新结果，下拉框不会闪一下旧的再切到新的。
+
+## 节流的 interval 怎么选
+
+节流的 interval 取决于"中间态需要多频繁更新"。常见范围：
+
+拖拽位置同步，16ms(60fps)或 32ms(每两帧，性能差的设备)。鼠标跟随、元素拖动要跟手，60fps 是流畅阈值。低端设备实际跑不到 60fps，interval 设太小反而抖动，32ms 是稳妥值。
+
+滚动加载，100-200ms。滚动事件触发频率极高，合并到 100ms 一次能显著降负载，又能保证滚到边界时及时触发预加载。
+
+窗口 resize，100-200ms。调整中响应，松手前几次合并。如果想"调整完才响应"，改用防抖，wait 取 200-300ms。
+
+鼠标移动跟随，16-32ms。同拖拽，跟手即可。
+
+不同设备的"流畅"阈值不一样。写死 16ms 在中高端设备上没问题，在低端安卓上实际可能只有 30fps，反而显得抖。性能敏感的场景可以基于 `requestAnimationFrame` 节流，由浏览器决定节奏，比固定 interval 更稳。
+
+<ThrottleIntervalDemo />
+
+```ts title="基于 rAF 的节流"
+// 跟随类场景用 rAF,让浏览器决定节奏,避免固定 interval 和帧率错位。
+function rafThrottle<F extends (...args: any[]) => void>(fn: F) {
+  let scheduled = false
+  let latestArgs: Parameters<F> | null = null
+  return (...args: Parameters<F>) => {
+    latestArgs = args
+    if (scheduled) return
+    scheduled = true
+    requestAnimationFrame(() => {
+      scheduled = false
+      if (latestArgs) fn(...latestArgs)
+    })
+  }
+}
+```
+
+rAF 节流没有"末次响应"问题，因为 rAF 在下一帧一定执行，最后一次输入不会丢。但 rAF 只在页面可见时触发，后台标签页里事件会堆积，切回来时一次性触发。可见性敏感的场景配合 `visibilitychange` 暂停。
+
+## 实现细节里的几个坑
+
+末次响应丢失是节流最常见的坑。前面 throttle 实现里 `else if (!timer)` 那段就是处理末次响应。少了这段，用户拖到一半停下来，最后一次 mousemove 落在间隔窗口里被合并，元素停在差一帧的位置。lodash 的 `_.throttle` 默认带末次响应，自己实现时容易漏。
+
+组件卸载要清理计时器。useEffect 返回清理函数，卸载时 clearTimeout，避免卸载后还触发 setState 报错或更新已卸载组件：
+
+```tsx title="useDebouncedCallback 片段"
+function useDebouncedCallback<F extends (...args: any[]) => void>(fn: F, wait: number) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fnRef = useRef(fn)
+  fnRef.current = fn  // 每次渲染拿到最新闭包,避免依赖数组里漏 fn。
+
+  const debounced = useCallback((...args: Parameters<F>) => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null
+      fnRef.current(...args)
+    }, wait)
+  }, [wait])
+
+  // 卸载时清理,避免对已卸载组件 setState。
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [])
+
+  return debounced
+}
+```
+
+防抖/节流函数要稳定引用。useCallback 或 useMemo 稳住，不要每次渲染都新建。每次新建相当于前一个计时器被丢弃，防抖失去合并效果，每次输入都重置成新计时器，等于没防抖。
+
+fn 用 ref 持有最新闭包，依赖数组只放 wait。如果依赖里写 fn，每次渲染 fn 变就重建 debounced，调用方 useEffect 依赖这个函数又触发新一轮重建，链式重渲染。ref 方案让函数引用稳定，闭包始终是最新的。
+
+## 选型清单
+
+判断用哪个，先看"中间态有没有意义"。无意义用防抖：搜索、表单联动、自动保存、提交按钮。有意义用节流：拖拽、滚动、resize、鼠标跟随。
+
+delay 取值看"用户停下来多久无感"。搜索 300ms 是平衡点，慢网加到 500ms，快接口减到 200ms。自动保存可以更长，800-1500ms，用户停下来一段时间才保存。
+
+interval 取值看"中间态需要多频繁更新"。跟手场景 16-32ms 或 rAF，滚动和 resize 100-200ms。
+
+末次响应、卸载清理、稳定引用、请求竞态，这四件事不论防抖还是节流都要处理。少了任何一项，"少触发几次"换来的不是流畅，是新的 bug。

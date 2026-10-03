@@ -93,6 +93,11 @@ const config: Config = {
             label: '教程介绍',
           },
           {
+            to: '/docs/crud-beyond/',
+            position: 'left',
+            label: 'CRUD 之外',
+          },
+          {
             to: '/blog',
             label: '博客',
             position: 'left'
@@ -123,6 +128,10 @@ const config: Config = {
             {
               label: '教程介绍',
               to: '/docs/intro',
+            },
+            {
+              label: 'CRUD 之外',
+              to: '/docs/crud-beyond',
             },
           ],
         },
@@ -177,7 +186,26 @@ const config: Config = {
     },
   } satisfies Preset.ThemeConfig,
   // 加载插件列表
-  plugins: [useVuePlugin],
+  plugins: [
+    useVuePlugin,
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'crud-beyond',
+        path: '.generated/crud-beyond-docs',
+        routeBasePath: 'docs/crud-beyond',
+        sidebarPath: './crud-beyond-sidebars.ts',
+        include: [
+          '2026-*-crud-beyond-*.md',
+          '2026-*-crud-beyond-*.mdx',
+          '2026-09-20-收敛加载状态提升用户体验.md',
+        ],
+        numberPrefixParser: false,
+        editUrl:
+          'https://github.com/cbtpro/docs-use-docusaurus/tree/main/blog',
+      },
+    ],
+  ],
 };
 
 export default config;

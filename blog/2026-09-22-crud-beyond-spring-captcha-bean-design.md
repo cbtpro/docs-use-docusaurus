@@ -4,15 +4,9 @@ authors: [cbtpro]
 description: 拆分验证码生成、图片渲染和缓存职责，处理原子消费、过期、测试隔离，并说明浏览器标识的能力边界。
 tags:
   - crud
-  - 验证码
-  - spring
-  - java
   - 后端
-  - 缓存
-  - bean
-  - 异地登录
-  - 工程实践
-  - 鲁棒性
+  - spring
+  - 安全
 ---
 
 登录验证码至少涉及三件事：生成答案、绘制挑战图片、保存并消费答案。拆开这些职责后，测试可以替换生成器，图片样式可以单独调整，缓存也能独立验证过期和并发行为。
@@ -84,6 +78,24 @@ public class RedisCaptchaCache implements CaptchaCache {
 
 `getAndDelete` 需要相应版本的 Spring Data Redis 和 Redis 6.2+ 的 [GETDEL](https://redis.io/docs/latest/commands/getdel/)。旧环境使用 Lua 完成一次原子取出与删除。缓存故障时返回可重试错误，待恢复后重新获取挑战。
 
+```java title="Lua 原子取出并删除"
+private static final String CONSUME_SCRIPT = """
+    local value = redis.call('GET', KEYS[1])
+    if value then
+        redis.call('DEL', KEYS[1])
+    end
+    return value
+    """;
+
+@Override
+public String consume(String challengeId) {
+    return redis.execute(
+        new DefaultRedisScript<>(CONSUME_SCRIPT, String.class),
+        List.of("captcha:" + challengeId)
+    );
+}
+```
+
 ```java title="CaptchaService.java"
 @Service
 public class CaptchaService {
@@ -118,6 +130,33 @@ public class CaptchaService {
 ```
 
 控制器获取挑战后，把 ID 写入服务端会话；登录时先检查会话和用途，再调用 verify 并清理挑战引用。客户端只收到挑战 ID 和图片，答案仅保存在服务端缓存。若允许多次尝试，在同一段 Lua 中比较答案、减少次数并按结果删除挑战。
+
+```java title="登录控制器中的会话与用途校验"
+@PostMapping("/login")
+public LoginResponse login(@RequestBody LoginCmd cmd, HttpSession session) {
+    // 会话中必须存在获取验证码时写入的挑战 ID。
+    String challengeId = (String) session.getAttribute("captcha:challengeId");
+    if (challengeId == null || !challengeId.equals(cmd.challengeId())) {
+        throw new CaptchaFailedException("会话已过期，请重新获取验证码");
+    }
+
+    // 检查用途：登录验证码不能用于重置密码。
+    String purpose = (String) session.getAttribute("captcha:purpose");
+    if (!"login".equals(purpose)) {
+        throw new CaptchaFailedException("验证码用途不匹配");
+    }
+
+    if (!captcha.verify(cmd.challengeId(), cmd.captcha())) {
+        throw new CaptchaFailedException();
+    }
+
+    // 验证通过后清理会话中的挑战引用，防止重用。
+    session.removeAttribute("captcha:challengeId");
+    session.removeAttribute("captcha:purpose");
+
+    // 继续密码校验...
+}
+```
 
 ## 图片实现的边界
 
