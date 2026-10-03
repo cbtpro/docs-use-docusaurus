@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs_use_docusaurus=self.webpackChunkdocs_use_docusaurus||[]).push([["2898"],{71338(s){s.exports=JSON.parse('{"name":"docusaurus-plugin-content-docs","id":"crud-beyond"}')}}]);
